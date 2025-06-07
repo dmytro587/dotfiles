@@ -6,6 +6,8 @@
 # 2. Install packages and applications from Brewfile
 # 3. Install Oh My Zsh for shell customization
 # 4. Copy dotfiles to home directory
+# 5. Apply new shell configuration
+# 6. Install Yarn if not already installed
 #
 # Usage: ./bootstrap.sh
 
@@ -32,4 +34,11 @@ fi
 echo "Copying dotfiles to home directory"
 cp ./.* $HOME
 
+# Apply new shell configuration
 source $HOME/.zshrc
+
+# Install yarn if not installed
+if ! command -v yarn &> /dev/null; then
+  echo "Installing Yarn"
+  npm install --global yarn
+fi
