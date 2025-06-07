@@ -44,6 +44,20 @@ This script will:
 - Copy the public key to your clipboard (ready to paste into GitHub)
 - Create config file with GitHub host settings
 
+## Git Configuration
+
+The repository includes a `github_setup.sh` script to configure your Git identity:
+
+```sh
+./github_setup.sh "Your Name" "your.email@example.com"
+```
+
+This script will:
+- Set your global Git username
+- Set your global Git email address
+
+This configuration is required before making commits to ensure proper attribution of your work.
+
 ## VS Code Settings
 
 For VS Code settings synchronization, use the built-in Settings Sync feature:

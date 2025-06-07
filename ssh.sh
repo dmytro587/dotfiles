@@ -1,5 +1,16 @@
 #!/bin/sh
 
+# This script sets up SSH keys for GitHub authentication
+# It will:
+# 1. Generate a new ED25519 SSH key
+# 2. Start the SSH agent
+# 3. Configure SSH to use keychain
+# 4. Add the new key to SSH agent
+#
+# Usage: ./ssh.sh "your.email@example.com"
+
+set -e
+
 echo "Generating a new SSH key for GitHub..."
 
 # Generating a new SSH key

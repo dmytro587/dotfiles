@@ -1,5 +1,14 @@
 # /bin/bash
 
+# This script bootstraps a new macOS development environment
+# It will:
+# 1. Install Homebrew package manager if not present
+# 2. Install packages and applications from Brewfile
+# 3. Install Oh My Zsh for shell customization
+# 4. Copy dotfiles to home directory
+#
+# Usage: ./bootstrap.sh
+
 set -e
 
 # Check if Homebrew is installed
