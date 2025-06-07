@@ -1,5 +1,7 @@
 # /bin/bash
 
+set -e
+
 # Check if Homebrew is installed
 if test ! $(which brew)
 then
