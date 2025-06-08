@@ -59,3 +59,15 @@ if ! command -v gcloud &> /dev/null; then
   rm /tmp/google-cloud-cli.tar.gz
   rm -r /tmp/google-cloud-sdk
 fi
+
+echo "Downloading Google Cloud CLI..."
+curl -fsSL https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-darwin-arm.tar.gz -o /tmp/google-cloud-cli.tar.gz
+
+echo "Extracting Google Cloud CLI..."
+tar -xzf /tmp/google-cloud-cli.tar.gz -C $HOME
+
+echo "Installing Google Cloud CLI..."
+$HOME/google-cloud-sdk/install.sh --quiet
+
+# Clean up
+rm /tmp/google-cloud-cli.tar.gz
