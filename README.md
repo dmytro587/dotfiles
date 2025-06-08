@@ -2,6 +2,10 @@
 
 Personal dotfiles and synchronization guides for macOS environment setup
 
+## TODO
+- [ ] Implement custom apps downloading instead of using Homebrew Cask
+- [ ] Integrate Mac App Store applications into Brewfile using `mas` CLI
+
 ## Features
 
 - Shell configuration (zsh with Oh My Zsh)
@@ -9,7 +13,6 @@ Personal dotfiles and synchronization guides for macOS environment setup
 - Homebrew packages and apps
 - Node.js environment (via nvm)
 - Development tools configuration
-- VS Code extensions
 
 ## Installation
 
