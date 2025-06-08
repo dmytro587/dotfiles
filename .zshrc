@@ -3,6 +3,7 @@
 
 export PATH="/usr/local/opt/postgresql@15/bin:$PATH"
 export PATH=$PATH:$HOME/go/bin
+export PATH=$PATH:/opt/homebrew/bin
 
 # Path to your Oh My Zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
@@ -174,8 +175,11 @@ alias git-branch='git branch | fzf | cut -c 3- | xargs git checkout'
 alias git-preview-branch="git branch | fzf --preview 'git show --color=always {-1}' \
   --bind 'enter:become(git checkout {-1})'"
 
-# The next line updates PATH for the Google Cloud SDK.
-source '/Users/beeshop/Documents/google-cloud-sdk/path.zsh.inc'
+# Google Cloud SDK configuration
+if [ -d "$HOME/google-cloud-sdk" ]; then
+  # The next line updates PATH for the Google Cloud SDK.
+  source "$HOME/google-cloud-sdk/path.zsh.inc"
 
-# The next line enables shell command completion for gcloud.
-source '/Users/beeshop/Documents/google-cloud-sdk/completion.zsh.inc'
+  # The next line enables shell command completion for gcloud.
+  source "$HOME/google-cloud-sdk/completion.zsh.inc"
+fi
