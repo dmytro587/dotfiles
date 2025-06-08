@@ -5,6 +5,7 @@ Personal dotfiles and synchronization guides for macOS environment setup
 ## TODO
 - [ ] Implement custom apps downloading instead of using Homebrew Cask
 - [ ] Integrate Mac App Store applications into Brewfile using `mas` CLI
+- [ ] Install `go`
 
 ## Features
 
