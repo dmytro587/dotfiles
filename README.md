@@ -72,3 +72,7 @@ For VS Code settings synchronization, use the built-in Settings Sync feature:
 4. Sign in with your GitHub account to start syncing
 
 This will keep your VS Code settings, extensions, and keybindings in sync across different machines.
+
+## K9s Configuration
+
+The repository includes a `.kube_config_example` file that demonstrates how to set up automatic K8s config export for k9s. Copy this example to `~/.kube/config` and modify the values according to your cluster setup. This configuration enables k9s to automatically fetch and refresh authentication tokens.
