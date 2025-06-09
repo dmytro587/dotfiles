@@ -13,7 +13,7 @@ current-context: <current-context-name>
 kind: Config
 preferences: {}
 users:
-- name: <your-user-name-0>
+- name: <your-user-name>
   user:
     exec:
       apiVersion: client.authentication.k8s.io/v1beta1
@@ -24,7 +24,7 @@ users:
       - --state=<s3-bucket-name>
       command: kops
       env:
-      - name: AWS-PROFILE
+      - name: AWS_PROFILE
         value: <your-aws-profile-name>
       interactiveMode: IfAvailable
       provideClusterInfo: false
