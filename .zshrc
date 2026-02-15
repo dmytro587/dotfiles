@@ -145,7 +145,7 @@ alias ll="ls -latr"
 source <(kubectl completion zsh)
 
 # Set theme for bat
-alias bat="bat --theme=TwoDark --color=always"
+alias bat="bat --theme=TwoDark --color=always --paging=never"
 
 # Set default options for lsd
 alias lsd="lsd --icon=never --color=never"
