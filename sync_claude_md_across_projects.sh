@@ -2,25 +2,48 @@
 
 if [ -z "$1" ]; then
   echo "Usage: $0 '<project-name-glob>'"
-  echo "Example: $0 'my-repository-*'"
+  echo "Examples:"
+  echo "  $0 'my-repository-*'            # quote to let the script expand"
+  echo "  $0 ../../my-repository-*        # your shell may expand into multiple args"
   exit 1
 fi
 
+# If the caller's shell already expanded a glob, we may receive multiple args.
+# Treat them as explicit directories/patterns to include.
 PATTERN=$1
 # Default base directory to the parent of the dotfiles repo
 BASE_DIR="${BASE_DIR:-$HOME/Documents/www}"
 
-# Find projects matching the pattern
+# Find projects matching the pattern(s)
 projects=()
-# Using find or just bash glob expansion
-for dir in $BASE_DIR/$PATTERN; do
-  if [ -d "$dir" ]; then
-    projects+=("$dir")
+# Using bash glob expansion. If the pattern includes a path separator,
+# treat it as a path glob as-is; otherwise, prefix with BASE_DIR.
+shopt -s nullglob
+if [ "$#" -gt 1 ]; then
+  for dir in "$@"; do
+    if [ -d "$dir" ]; then
+      projects+=("$dir")
+    fi
+  done
+  search_glob="$*"
+else
+  if [[ "$PATTERN" == *"/"* ]]; then
+    search_glob=$PATTERN
+  else
+    search_glob="$BASE_DIR/$PATTERN"
   fi
-done
+
+  for dir in $search_glob; do
+    if [ -d "$dir" ]; then
+      projects+=("$dir")
+    fi
+  done
+fi
+shopt -u nullglob
 
 if [ ${#projects[@]} -eq 0 ]; then
   echo "No projects found matching '$PATTERN'."
+  echo "Tried: $search_glob"
   exit 1
 fi
 
