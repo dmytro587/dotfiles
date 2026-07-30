@@ -1,0 +1,29 @@
+plugins:
+  edit-secret:
+    shortCut: Ctrl-X
+    confirm: false
+    description: Edit Decoded Secret
+    scopes:
+      - secrets
+    command: sh
+    background: false
+    args:
+      - -c
+      - >-
+        tempfile=$(mktemp);
+        kubectl get secrets --context $CONTEXT --namespace $NAMESPACE $NAME -o yaml > "$tempfile";
+        yq -P -i '.data |= with_entries(.value |= @base64d)' "$tempfile";
+
+        before_hash=$(shasum -a 256 "$tempfile" | cut -d' ' -f1);
+        vim $tempfile;
+        after_hash=$(shasum -a 256 "$tempfile" | cut -d' ' -f1);
+
+        if [ "$before_hash" = "$after_hash" ]; then
+          echo "k9s edit-secret: no changes; skipping apply" >&2;
+          rm "$tempfile";
+          exit 0;
+        fi;
+
+        yq -P -i '.data |= with_entries(.value |= @base64)' "$tempfile";
+        kubectl apply --context $CONTEXT --namespace $NAMESPACE -f "$tempfile";
+        rm "$tempfile";
