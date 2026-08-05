@@ -17,12 +17,14 @@ import {
 	type PermissionPolicyConfig,
 	type PermissionRequest,
 	type RiskClass,
+	type RiskJudgment,
 } from "./types.ts";
 
 export interface PermissionUi {
 	hasUI: boolean;
 	confirm(title: string, message: string): Promise<boolean>;
 	approveHighRisk?(title: string, message: string): Promise<HighRiskApproval | undefined>;
+	judgeHighRisk?(title: string, message: string): Promise<RiskJudgment | undefined>;
 }
 
 export interface GateSession {
@@ -202,6 +204,65 @@ export class PermissionGate {
 			reason: assessment.reason,
 		});
 	}
+	private async reviewHighRiskCall(
+		assessment: Assessment,
+		call: ToolCall,
+		ui: PermissionUi | undefined,
+	): Promise<{ effectiveRisk: RiskClass; approval: AuditEvent["approval"] } | { reason: string }> {
+		if (!ui?.hasUI) return { reason: "High-risk operation requires an interactive approval UI." };
+		if (!ui.judgeHighRisk) return { reason: "High-risk operation could not be reviewed by the configured LLM judge." };
+
+		const preview = assessment.canonicalToolName === "bash" && typeof call.input.command === "string"
+			? `Command: ${call.input.command.slice(0, 400)}`
+			: assessment.resource
+				? `Target: ${assessment.resource.relativePath}`
+				: "Target: custom or external tool operation";
+		const judgment = await ui.judgeHighRisk(
+			"Classify high-risk Pi operation",
+			`Tool: ${assessment.canonicalToolName}\n${redactText(preview)}\nDeterministic reason: ${redactText(assessment.reason)}`,
+		);
+		if (!judgment) return { reason: "High-risk operation could not be classified by the configured LLM judge." };
+
+		const selected = ui.approveHighRisk
+			? await ui.approveHighRisk(
+				"Apply LLM risk classification?",
+				`Tool: ${assessment.canonicalToolName}\n${redactText(preview)}\nDeterministic risk: high\nLLM risk: ${judgment.risk}\nLLM rationale: ${redactText(judgment.reason)}`,
+			) ?? "deny"
+			: await ui.confirm(
+				"Apply LLM risk classification?",
+				`Tool: ${assessment.canonicalToolName}\n${redactText(preview)}\nDeterministic risk: high\nLLM risk: ${judgment.risk}\nLLM rationale: ${redactText(judgment.reason)}`,
+			) ? "allow-and-journal" : "deny";
+		if (selected === "deny") return { reason: "LLM risk classification was not approved." };
+
+		try {
+			await this.falsePositiveJournal.record({
+				kind: "false-positive",
+				timestamp: new Date().toISOString(),
+				sessionId: this.session!.sessionId,
+				runtimeToolName: assessment.toolName,
+				canonicalToolName: assessment.canonicalToolName,
+				operationDigest: assessment.operationDigest,
+				resourceDigest: assessment.resourceDigest,
+				declaredRisk: "high",
+				declaredRiskReason: "Deterministic policy classified the direct tool call as high risk.",
+				computedFloor: assessment.floor,
+				computedReason: redactText(assessment.reason),
+				effectiveRisk: judgment.risk,
+				llmRisk: judgment.risk,
+				llmReason: redactText(judgment.reason),
+				mode: this.mode,
+				policyRevision: this.options.policyRevision,
+				intent: "Execute the direct tool call.",
+				expectedEffect: redactText(preview),
+				rollbackPlan: assessment.reversible ? "A reversal journal is available." : "No reversal journal is available.",
+				userDisposition: "false-positive",
+			});
+		} catch {
+			return { reason: "LLM risk classification was not applied because the false-positive journal could not be written." };
+		}
+		return { effectiveRisk: judgment.risk, approval: "confirmed-and-journaled" };
+	}
+
 
 	private permitFor(assessment: Assessment, minimumRisk: RiskClass) {
 		const permit = this.permits.peek(assessment.operationDigest);
@@ -279,6 +340,7 @@ export class PermissionGate {
 						computedReason: redactText(assessment.reason),
 						effectiveRisk,
 						mode: this.mode,
+						policyRevision: this.options.policyRevision,
 						intent: redactText(request.intent),
 						expectedEffect: redactText(request.expectedEffect),
 						rollbackPlan: redactText(request.rollbackPlan),
@@ -318,7 +380,7 @@ export class PermissionGate {
 		};
 	}
 
-	async handleToolCall(call: ToolCall): Promise<{ block: true; reason: string } | undefined> {
+	async handleToolCall(call: ToolCall, ui?: PermissionUi): Promise<{ block: true; reason: string } | undefined> {
 		const unavailable = this.unavailable();
 		if (unavailable) return { block: true, reason: unavailable };
 		const assessment = await this.assessCall(call.toolName, call.input);
@@ -331,20 +393,33 @@ export class PermissionGate {
 			await this.recordAssessment(assessment, "blocked", "denied");
 			return { block: true, reason: inheritanceFailure };
 		}
-		if (assessment.floor === "low") {
-			await this.recordAssessment(assessment, "allowed", "not-required");
+
+		let effectiveRisk = assessment.floor;
+		let reviewApproval: AuditEvent["approval"] | undefined;
+		if (assessment.floor === "high" && this.mode !== "high") {
+			const review = await this.reviewHighRiskCall(assessment, call, ui);
+			if ("reason" in review) {
+				await this.recordAssessment(assessment, "blocked-llm-review", "denied");
+				return { block: true, reason: review.reason };
+			}
+			effectiveRisk = review.effectiveRisk;
+			reviewApproval = review.approval;
+		}
+
+		if (effectiveRisk === "low") {
+			await this.recordAssessment(assessment, "allowed", reviewApproval ?? "not-required", undefined, undefined, effectiveRisk);
 			return undefined;
 		}
 		if (this.mode === "low") {
-			await this.recordAssessment(assessment, "blocked", "denied");
-			return { block: true, reason: `${assessment.floor} operations are denied in low autonomy mode.` };
+			await this.recordAssessment(assessment, "blocked", "denied", undefined, undefined, effectiveRisk);
+			return { block: true, reason: `${effectiveRisk} operations are denied in low autonomy mode.` };
 		}
-		if (assessment.floor === "high") {
+		if (effectiveRisk === "high") {
 			if (this.mode === "medium") {
 				await this.recordAssessment(assessment, "blocked", "denied");
 				return { block: true, reason: "High-risk operations are denied in medium autonomy mode." };
 			}
-			if (this.mode === "auto") {
+			if (this.mode === "auto" && !reviewApproval) {
 				const permit = this.permitFor(assessment, "high");
 				if (!permit) {
 					await this.recordAssessment(assessment, "blocked-missing-permit", "denied");
@@ -354,16 +429,14 @@ export class PermissionGate {
 				await this.recordAssessment(assessment, "allowed", permit.approval, permit.declaredRisk, permit.declaredRiskReason, permit.effectiveRisk);
 				return undefined;
 			}
-			// The user selected high autonomy explicitly. High work is audited but
-			// deliberately unattended, while hard denials still apply above.
-			await this.recordAssessment(assessment, "allowed", "mode-high");
+			await this.recordAssessment(assessment, "allowed", reviewApproval ?? "mode-high", undefined, undefined, effectiveRisk);
 			return undefined;
 		}
 
-		// Auto still requires a permit for every Medium operation. Only workspace
-		// text mutations also require a reversal journal immediately before execution.
+		// Auto requires a permit for ordinary Medium work. An approved High-risk
+		// LLM review is a user-confirmed, journaled exception.
 		let permit;
-		if (this.mode === "auto") {
+		if (this.mode === "auto" && !reviewApproval) {
 			permit = this.permitFor(assessment, "medium");
 			if (!permit) {
 				await this.recordAssessment(assessment, "blocked-missing-permit", "denied");
@@ -375,7 +448,7 @@ export class PermissionGate {
 				await this.recordAssessment(assessment, "blocked-expired-permit", "denied");
 				return { block: true, reason: "Permission permit expired before execution." };
 			}
-			await this.recordAssessment(assessment, "allowed", permit?.approval ?? "not-required", permit?.declaredRisk, permit?.declaredRiskReason, permit?.effectiveRisk ?? assessment.floor);
+			await this.recordAssessment(assessment, "allowed", reviewApproval ?? permit?.approval ?? "not-required", permit?.declaredRisk, permit?.declaredRiskReason, permit?.effectiveRisk ?? effectiveRisk);
 			return undefined;
 		}
 		try {
@@ -394,11 +467,11 @@ export class PermissionGate {
 				journalEntry,
 				declaredRisk: permit?.declaredRisk,
 				declaredRiskReason: permit?.declaredRiskReason,
-				effectiveRisk: permit?.effectiveRisk,
-				approval: permit?.approval,
+				effectiveRisk: permit?.effectiveRisk ?? effectiveRisk,
+				approval: reviewApproval ?? permit?.approval,
 			});
 			this.mediumBudget = await this.journal!.usage();
-			await this.recordAssessment(assessment, "allowed", permit?.approval ?? "not-required", permit?.declaredRisk, permit?.declaredRiskReason, permit?.effectiveRisk ?? assessment.floor);
+			await this.recordAssessment(assessment, "allowed", reviewApproval ?? permit?.approval ?? "not-required", permit?.declaredRisk, permit?.declaredRiskReason, permit?.effectiveRisk ?? effectiveRisk);
 			return undefined;
 		} catch {
 			await this.recordAssessment(assessment, "blocked-journal-failure", "denied");

@@ -324,6 +324,53 @@ test("keeps ordinary approval and denial distinct from false-positive journaling
 	assert.equal(deniedResult.ok, false);
 });
 
+test("applies an approved LLM downgrade to a deterministic High direct operation and journals it", async () => {
+	const { agentDirectory, gate } = await setup();
+	assert.equal(gate.setMode("medium"), true);
+	const result = await gate.handleToolCall(
+		{ toolCallId: "rename-skill", toolName: "bash", input: { command: "mv .agents/skills/prometheus .agents/skills/grafana-prometheus" } },
+		{
+			hasUI: true,
+			confirm: async () => true,
+			approveHighRisk: async () => "allow-and-journal",
+			judgeHighRisk: async () => ({ risk: "medium", reason: "This is a bounded workspace rename." }),
+		},
+	);
+	assert.equal(result, undefined);
+	const entries = JSON.parse(await readFile(join(agentDirectory, "security", "false-positive-journal.json"), "utf8"));
+	assert.equal(entries.length, 1);
+	assert.equal(entries[0].computedFloor, "high");
+	assert.equal(entries[0].effectiveRisk, "medium");
+	assert.equal(entries[0].policyRevision, "sha256:test-policy");
+	assert.equal(entries[0].llmRisk, "medium");
+	assert.equal(entries[0].llmReason, "This is a bounded workspace rename.");
+});
+
+test("rejects a deterministic High direct operation when the LLM downgrade is rejected", async () => {
+	const { gate } = await setup();
+	assert.equal(gate.setMode("medium"), true);
+	const result = await gate.handleToolCall(
+		{ toolCallId: "rename-skill", toolName: "bash", input: { command: "mv .agents/skills/prometheus .agents/skills/grafana-prometheus" } },
+		{
+			hasUI: true,
+			confirm: async () => false,
+			approveHighRisk: async () => "deny",
+			judgeHighRisk: async () => ({ risk: "medium", reason: "This is a bounded workspace rename." }),
+		},
+	);
+	assert.match(result?.reason ?? "", /not approved/i);
+});
+
+test("denies a deterministic High direct operation when the LLM judge is unavailable", async () => {
+	const { gate } = await setup();
+	assert.equal(gate.setMode("medium"), true);
+	const result = await gate.handleToolCall(
+		{ toolCallId: "rename-skill", toolName: "bash", input: { command: "mv .agents/skills/prometheus .agents/skills/grafana-prometheus" } },
+		{ hasUI: true, confirm: async () => true },
+	);
+	assert.match(result?.reason ?? "", /LLM judge/i);
+});
+
 test("explicit high autonomy permits High work unattended while preserving hard denials", async () => {
 	const { gate } = await setup();
 	assert.equal(gate.setMode("high"), true);

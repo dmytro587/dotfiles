@@ -99,11 +99,13 @@ A `permission_request` does not execute an operation. It independently re-runs `
 
 ## Risk and autonomy
 
-The policy always computes the minimum risk from the real tool call; a model cannot lower it by declaring a lower risk.
+The policy always computes a deterministic floor from the real tool call; a model cannot lower it by declaring a lower risk in `permission_request`.
 
-The model supplies `declaredRisk`, `declaredRiskReason`, intent, expected effect, and rollback context for a permit request; it is not an internal risk classifier. Droid's visible `Execute` contract likewise makes the model supply `riskLevel` and a reason, but does not reveal whether any private backend verifies that declaration. Pi's gate always computes its own floor from the target call and enforces the stricter value. It records the declared risk and a redacted declared rationale when a permit is issued, consumed, or finalized.
+When a direct operation has a deterministic High floor outside explicit `high` autonomy, the gate sends a redacted operation summary to the configured Pi model for an independent Low, Medium, or High classification. It then shows the deterministic and LLM classifications and offers `Apply and remember` or `Reject`. Applying records the LLM classification as the effective risk in the false-positive journal before execution. A missing, malformed, or unavailable LLM judgment denies the operation. Hard denials and subagent policy-revision checks occur before the LLM call and remain non-overridable.
 
-For Auto-mode High work, the selector offers `Yes`, `Yes. Write to the false-positive-journal.json`, and `No`. The journal choice approves the exact permitted operation and records the user's suspected classification false positive before the permit is issued; it does not assert that the operation is safe. If the journal cannot be written, the operation remains denied.
+The model supplies `declaredRisk`, `declaredRiskReason`, intent, expected effect, and rollback context for a permit request; it is not an internal risk classifier. Droid's visible `Execute` contract likewise makes the model supply `riskLevel` and a reason, but does not reveal whether any private backend verifies that declaration. Pi records the declared risk and a redacted declared rationale when a permit is issued, consumed, or finalized.
+
+For Auto-mode High permit requests, the selector offers `Apply and remember` or `Reject`. Applying journals the exact permitted operation before the permit is issued; it does not assert that the operation is safe. If the journal cannot be written, the operation remains denied.
 
 - **Low** is strictly read-only safe workspace work, session-local coordination, public search retrieval, or an exact allowlisted inspection/inventory CLI operation. It runs without a permit and is audited.
 - **Medium** is bounded impact: verified workspace-text `edit`/`write`, tests and builds, trusted dependency installation, selected local Git/container/cloud operations, and public fetches. Every Auto Medium call requires a permit. Only `journalAdapter: "workspace-text"` is undoable; `journalAdapter: "none"` has no undo entry.
@@ -114,9 +116,9 @@ For Auto-mode High work, the selector offers `Yes`, `Yes. Write to the false-pos
 
 | Mode | Behaviour |
 | --- | --- |
-| `auto` | Low runs. Every Medium requires a matching `permission_request` from the prior model turn; workspace-text Medium journals, non-journal Medium consumes its permit without an undo entry. High opens a selector with ordinary approval, approval plus false-positive journaling, or denial; headless High work is denied. |
-| `low` | Only Low operations run; Medium and High are denied. |
-| `medium` | Low and Medium operations run; only workspace-text Medium receives a journal entry. High is denied. |
+| `auto` | Low runs. Every Medium requires a matching `permission_request` from the prior model turn; workspace-text Medium journals, non-journal Medium consumes its permit without an undo entry. A direct deterministic-High operation is LLM-classified and requires `Apply and remember`; headless review is denied. |
+| `low` | Only Low operations run. A deterministic-High direct operation can run only after the LLM judges it Low and the user applies and journals that judgment. |
+| `medium` | Low and Medium operations run; only workspace-text Medium receives a journal entry. A deterministic-High direct operation can run only after the LLM judges it Low or Medium and the user applies and journals that judgment. |
 | `high` | Low, Medium, and High work run unattended after deterministic hard-denial checks. High decisions remain audited. |
 
 Set the mode for a session with `/permission-mode auto|low|medium|high`, or press `Option+L` to cycle `auto → low → medium → high → auto`. Start Pi with `--permission-autonomy high` for a different default. The policy file provides the default mode and bounded file, request, permit, and journal limits; editing it changes the policy revision and invalidates permits issued under the previous revision.
@@ -135,7 +137,7 @@ permission-journal/<sanitized-session-id>/     # 0700 directory
 security/false-positive-journal.json           # 0700 directory, 0600 atomically replaced JSON array
 ```
 
-Audit records contain timestamps, tool names, risk and decision metadata, policy and operation digests, and a short reason. The false-positive journal adds the redacted model rationale, deterministic rationale, model intent/effect/rollback context, and user disposition, but never the full tool input, command, file content, or path. Neither record stores credentials. The extension also appends the audit facts as Pi custom session entries. The workspace-text journal is intentionally private because pre-images contain the original file contents; it never accepts protected or out-of-workspace resources.
+Audit records contain timestamps, tool names, risk and decision metadata, policy and operation digests, and a short reason. The false-positive journal adds the redacted model rationale, deterministic rationale, and, for direct High overrides, the user-approved LLM effective risk, but never the full tool input, command, file content, or path. Neither record stores credentials. The extension also appends the audit facts as Pi custom session entries. The workspace-text journal is intentionally private because pre-images contain the original file contents; it never accepts protected or out-of-workspace resources.
 
 `permission_undo` asks for an interactive review, then restores only the most recent applied journal entry whose target still matches the journaled post-operation checksum. If another process changed the target, undo refuses rather than overwriting that change.
 

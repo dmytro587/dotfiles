@@ -18,6 +18,8 @@ export interface FalsePositiveJournalEntry {
 	computedFloor: "low" | "medium" | "high";
 	computedReason: string;
 	effectiveRisk: "low" | "medium" | "high";
+	llmRisk?: "low" | "medium" | "high";
+	llmReason?: string;
 	mode: "auto" | "low" | "medium" | "high";
 	policyRevision: string;
 	intent: string;

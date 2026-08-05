@@ -7,7 +7,7 @@ import { redactText } from "./audit.ts";
 import { PermissionGate } from "./gate.ts";
 import { isAutonomyMode, nextAutonomyMode, type AutonomyMode } from "./types.ts";
 import { isMacOptionLInput } from "./shortcuts.ts";
-
+import { judgeHighRisk } from "./risk-judge.ts";
 const ENTRY_TYPE = "permission-gate";
 const INTERNAL_TOOLS = new Set(["permission_request", "permission_undo"]);
 
@@ -81,12 +81,12 @@ export default async function permissionGateExtension(pi: ExtensionAPI): Promise
 				approveHighRisk: async (title, message) => {
 					const choice = await ctx.ui.select(
 						`${title}\n\n${redactText(message, 1_800)}`,
-						["Yes", "Yes. Write to the false-positive-journal.json", "No"],
+						["Apply and remember", "Reject"],
 					);
-					if (choice === "Yes") return "allow";
-					if (choice === "Yes. Write to the false-positive-journal.json") return "allow-and-journal";
+					if (choice === "Apply and remember") return "allow-and-journal";
 					return "deny";
 				},
+				judgeHighRisk: (title, message) => judgeHighRisk(ctx, `${title}\n\n${redactText(message, 1_800)}`),
 			});
 			return { content: [{ type: "text", text: result.message }], details: { permitted: result.ok } };
 		},
@@ -172,6 +172,17 @@ export default async function permissionGateExtension(pi: ExtensionAPI): Promise
 				toolCallId: event.toolCallId,
 				toolName: event.toolName,
 				input: event.input as Record<string, unknown>,
+			}, {
+				hasUI: ctx.hasUI,
+				confirm: (title, message) => ctx.ui.confirm(title, redactText(message, 1_800)),
+				approveHighRisk: async (title, message) => {
+					const choice = await ctx.ui.select(
+						`${title}\n\n${redactText(message, 1_800)}`,
+						["Apply and remember", "Reject"],
+					);
+					return choice === "Apply and remember" ? "allow-and-journal" : "deny";
+				},
+				judgeHighRisk: (title, message) => judgeHighRisk(ctx, `${title}\n\n${redactText(message, 1_800)}`),
 			});
 		} catch {
 			return { block: true, reason: "Permission gate failed while assessing this operation." };

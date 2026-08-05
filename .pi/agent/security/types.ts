@@ -4,6 +4,10 @@ export type RiskClass = (typeof RISK_CLASSES)[number];
 export const AUTONOMY_MODES = ["auto", "low", "medium", "high"] as const;
 export type AutonomyMode = (typeof AUTONOMY_MODES)[number];
 export type HighRiskApproval = "allow" | "allow-and-journal" | "deny";
+export interface RiskJudgment {
+	risk: RiskClass;
+	reason: string;
+}
 
 export interface PermissionPolicyConfig {
 	version: 1;
