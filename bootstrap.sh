@@ -35,6 +35,10 @@ fi
 echo "Copying dotfiles to home directory"
 cp ./.* $HOME
 
+# Install the explicitly ordered Pi permission gate without replacing other Pi settings.
+echo "Installing Pi permission gate"
+bash ./.pi/install_pi_permission_gate.sh
+
 # Apply new shell configuration
 source $HOME/.zshrc
 

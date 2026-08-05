@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "testedPiVersion": "0.83.0",
+  "defaultAutonomy": "auto",
+  "limits": {
+    "maxTextFileBytes": 262144,
+    "maxOperationBytes": 65536,
+    "maxPermitRequestBytes": 65536,
+    "permitTtlMs": 300000,
+    "maxMediumFilesPerSession": 25,
+    "maxMediumSnapshotBytesPerSession": 2097152
+  }
+}
