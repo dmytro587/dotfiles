@@ -1,5 +1,5 @@
 ---
-name: prometheus
+name: grafana-prometheus
 license: Apache-2.0
 description: >
   Prometheus and Grafana Cloud Metrics overview including PromQL query language, Metrics Drilldown,

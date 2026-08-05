@@ -122,7 +122,7 @@
       "installedAt": "2026-04-29T10:32:25.016Z",
       "updatedAt": "2026-04-29T10:32:25.016Z"
     },
-    "orchestration": {
+    "orca-orchestration": {
       "source": "stablyai/orca",
       "sourceType": "github",
       "sourceUrl": "https://github.com/stablyai/orca.git",
@@ -375,7 +375,7 @@
       "installedAt": "2026-05-29T13:55:00.590Z",
       "updatedAt": "2026-05-29T13:55:00.590Z"
     },
-    "alerting-irm": {
+    "grafana-alerting-irm": {
       "source": "grafana/skills",
       "sourceType": "github",
       "sourceUrl": "https://github.com/grafana/skills.git",
@@ -385,7 +385,7 @@
       "installedAt": "2026-06-12T15:08:08.419Z",
       "updatedAt": "2026-06-12T15:08:08.419Z"
     },
-    "alloy": {
+    "grafana-alloy": {
       "source": "grafana/skills",
       "sourceType": "github",
       "sourceUrl": "https://github.com/grafana/skills.git",
@@ -395,7 +395,7 @@
       "installedAt": "2026-06-12T15:08:08.433Z",
       "updatedAt": "2026-06-12T15:08:08.433Z"
     },
-    "dashboarding": {
+    "grafana-dashboarding": {
       "source": "grafana/skills",
       "sourceType": "github",
       "sourceUrl": "https://github.com/grafana/skills.git",
@@ -415,7 +415,7 @@
       "installedAt": "2026-06-12T15:08:08.434Z",
       "updatedAt": "2026-06-12T15:08:08.434Z"
     },
-    "opentelemetry": {
+    "grafana-opentelemetry": {
       "source": "grafana/skills",
       "sourceType": "github",
       "sourceUrl": "https://github.com/grafana/skills.git",
@@ -425,7 +425,7 @@
       "installedAt": "2026-06-12T15:08:08.435Z",
       "updatedAt": "2026-06-12T15:08:08.435Z"
     },
-    "loki": {
+    "grafana-loki": {
       "source": "grafana/skills",
       "sourceType": "github",
       "sourceUrl": "https://github.com/grafana/skills.git",
@@ -435,7 +435,7 @@
       "installedAt": "2026-06-12T15:08:08.435Z",
       "updatedAt": "2026-06-12T15:08:08.435Z"
     },
-    "prometheus": {
+    "grafana-prometheus": {
       "source": "grafana/skills",
       "sourceType": "github",
       "sourceUrl": "https://github.com/grafana/skills.git",
@@ -445,7 +445,7 @@
       "installedAt": "2026-06-12T15:08:08.436Z",
       "updatedAt": "2026-06-12T15:08:08.436Z"
     },
-    "tempo": {
+    "grafana-tempo": {
       "source": "grafana/skills",
       "sourceType": "github",
       "sourceUrl": "https://github.com/grafana/skills.git",
@@ -455,7 +455,7 @@
       "installedAt": "2026-06-12T15:08:08.436Z",
       "updatedAt": "2026-06-12T15:08:08.436Z"
     },
-    "computer-use": {
+    "orca-computer-use": {
       "source": "stablyai/orca",
       "sourceType": "github",
       "sourceUrl": "https://github.com/stablyai/orca.git",

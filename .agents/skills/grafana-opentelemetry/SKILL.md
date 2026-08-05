@@ -1,5 +1,5 @@
 ---
-name: opentelemetry
+name: grafana-opentelemetry
 license: Apache-2.0
 description: >
   OpenTelemetry with Grafana stack. Covers OTel SDK instrumentation for Go/Java/Python/Node.js/.NET,

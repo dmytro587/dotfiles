@@ -1,5 +1,5 @@
 ---
-name: dashboarding
+name: grafana-dashboarding
 license: Apache-2.0
 description:
   Create, modify, and organise Grafana dashboards including panels, variables, transformations,
