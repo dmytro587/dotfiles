@@ -11,7 +11,7 @@ import {
 	sha256,
 	stableJson,
 } from "./canonical.ts";
-import { assessBashCommand } from "./bash-policy.ts";
+import { assessBashCommand, type CompiledCommandPolicy } from "./bash-policy.ts";
 import { canonicalToolName } from "./tool-identity.ts";
 import type { Assessment, CanonicalPath, MediumBudget, PermissionPolicyConfig, RiskClass } from "./types.ts";
 
@@ -20,6 +20,7 @@ export interface AssessmentContext {
 	sessionId: string;
 	policyRevision: string;
 	policy: PermissionPolicyConfig;
+	commandPolicy: CompiledCommandPolicy;
 	mediumBudget: MediumBudget;
 }
 
@@ -100,7 +101,7 @@ function assessment(
 	context: AssessmentContext,
 	floor: RiskClass,
 	reason: string,
-	overrides: Partial<Pick<Assessment, "hardDeny" | "journalAdapter" | "resource" | "predictedSnapshotBytes">> = {},
+	overrides: Partial<Pick<Assessment, "hardDeny" | "journalAdapter" | "resource" | "predictedSnapshotBytes" | "offAllowed" | "forceConfirmation" | "shieldPlans">> = {},
 ): Assessment {
 	const canonicalName = canonicalToolName(toolName);
 	const journalAdapter = overrides.journalAdapter ?? "none";
@@ -110,6 +111,9 @@ function assessment(
 		canonicalToolName: canonicalName,
 		floor,
 		hardDeny: false,
+		offAllowed: false,
+		forceConfirmation: false,
+		shieldPlans: [],
 		reason,
 		workspace,
 		operationDigest: operationDigest(canonicalName, input, workspace, context.sessionId, context.policyRevision),
@@ -232,14 +236,22 @@ export async function assess(
 
 	if (classificationToolName === "bash") {
 		const command = typeof input.command === "string" ? input.command : "";
-		const bash = await assessBashCommand(command, context.cwd);
-		return assessment(toolName, input, context, bash.floor, bash.reason, { hardDeny: bash.hardDeny });
+		const bash = await assessBashCommand(command, context.cwd, context.commandPolicy);
+		return assessment(toolName, input, context, bash.floor, bash.reason, {
+			hardDeny: bash.hardDeny,
+			offAllowed: bash.offAllowed,
+			forceConfirmation: bash.forceConfirmation,
+			shieldPlans: bash.shieldPlans,
+		});
 	}
 
 	if (classificationToolName === "read") {
 		const resolved = await resolveResource(toolName, input, context, input.path);
 		if (resolved.rejected) return resolved.rejected;
-		return assessment(toolName, input, context, "low", "Workspace read-only operation.", { resource: resolved.resource });
+		return assessment(toolName, input, context, "low", "Workspace read-only operation.", {
+			resource: resolved.resource,
+			offAllowed: true,
+		});
 	}
 
 	if (classificationToolName === "grep" || classificationToolName === "find" || classificationToolName === "ls") {
@@ -262,7 +274,10 @@ export async function assess(
 			classificationToolName === "grep" || classificationToolName === "find" ? canonicalizeSearchPath : canonicalizePath,
 		);
 		if (resolved.rejected) return resolved.rejected;
-		return assessment(toolName, input, context, "low", "Workspace read-only search or listing.", { resource: resolved.resource });
+		return assessment(toolName, input, context, "low", "Workspace read-only search or listing.", {
+			resource: resolved.resource,
+			offAllowed: true,
+		});
 	}
 
 	if (classificationToolName === "edit" || classificationToolName === "write") {
@@ -272,7 +287,7 @@ export async function assess(
 	}
 
 	if (classificationToolName === "todo" || classificationToolName === "wait") {
-		return assessment(toolName, input, context, "low", "Session-local coordination operation.");
+		return assessment(toolName, input, context, "low", "Session-local coordination operation.", { offAllowed: true });
 	}
 
 	if (classificationToolName === "web_search" || classificationToolName === "get_search_content") {

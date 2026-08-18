@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:permission-gate": "node --experimental-strip-types --test agent/security/bash-policy.test.ts agent/security/permission-policy.test.ts agent/security/permission-journal.test.ts agent/security/permission-gate.test.ts agent/security/permission-installer.test.ts agent/security/permission-extension-load.test.ts"
+    "test:permission-gate": "node --experimental-strip-types --test agent/security/bash-policy.test.ts agent/security/config.test.ts agent/security/permission-policy.test.ts agent/security/permission-journal.test.ts agent/security/permission-gate.test.ts agent/security/permission-installer.test.ts agent/security/permission-extension-load.test.ts agent/security/shield.test.ts"
   }
 }

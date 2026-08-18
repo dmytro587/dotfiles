@@ -24,6 +24,7 @@ for source_file in "$source_agent_dir/security"/*.ts; do
 	esac
 	install -m 0600 "$source_file" "$security_dir/$(basename "$source_file")"
 done
+rm -f "$security_dir/permits.ts" "$security_dir/risk-judge.ts"
 install -m 0600 "$policy_source" "$agent_dir/permission-policy.json"
 
 node - "$settings_path" "$extension_path" <<'NODE'
@@ -46,7 +47,7 @@ if (settings.extensions !== undefined && !Array.isArray(settings.extensions)) {
   throw new Error(`Refusing to overwrite non-array extensions in ${settingsPath}`);
 }
 const extensions = Array.isArray(settings.extensions) ? settings.extensions.filter((entry) => entry !== extensionPath) : [];
-extensions.push(extensionPath); // configured paths load after auto-discovered extensions
+extensions.push(extensionPath); // configured paths load after discovered extensions
 settings.extensions = extensions;
 const temporaryPath = `${settingsPath}.${process.pid}.tmp`;
 fs.mkdirSync(path.dirname(settingsPath), { recursive: true, mode: 0o700 });
@@ -55,4 +56,4 @@ fs.renameSync(temporaryPath, settingsPath);
 NODE
 
 echo "Installed Pi permission gate at $extension_path"
-echo "Default mode is configured in $agent_dir/permission-policy.json; use /permission-mode high for unattended High operations."
+echo "Default mode is Off in $agent_dir/permission-policy.json; use /permission-mode high for unattended High operations."

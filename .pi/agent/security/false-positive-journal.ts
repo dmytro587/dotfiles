@@ -1,31 +1,42 @@
 import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { isAutonomyMode, type AutonomyMode } from "./types.ts";
 
 const MAX_ENTRIES = 1_000;
 const MAX_BYTES = 1_048_576;
+const JOURNAL_ENTRY_KEYS = ["schemaVersion", "kind", "timestamp", "sessionId", "operationDigest", "resourceDigest", "computedFloor", "computedReason", "mode", "policyRevision", "userDisposition"];
 
 export interface FalsePositiveJournalEntry {
-	kind: "false-positive";
+	schemaVersion: 1;
+	kind: "deterministic-high-allow-once";
 	timestamp: string;
 	sessionId: string;
-	runtimeToolName: string;
-	canonicalToolName: string;
 	operationDigest: string;
 	resourceDigest?: string;
-	declaredRisk: "low" | "medium" | "high";
-	declaredRiskReason: string;
-	computedFloor: "low" | "medium" | "high";
+	computedFloor: "high";
 	computedReason: string;
-	effectiveRisk: "low" | "medium" | "high";
-	llmRisk?: "low" | "medium" | "high";
-	llmReason?: string;
-	mode: "auto" | "low" | "medium" | "high";
+	mode: AutonomyMode;
 	policyRevision: string;
-	intent: string;
-	expectedEffect: string;
-	rollbackPlan: string;
-	userDisposition: "false-positive";
+	userDisposition: "allow-once";
+}
+
+function hasJournalEntryShape(entry: unknown) {
+	if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return false;
+	if (!Object.keys(entry).every((key) => JOURNAL_ENTRY_KEYS.includes(key))) return false;
+	if (!("schemaVersion" in entry) || !("kind" in entry) || !("timestamp" in entry) || !("sessionId" in entry) || !("operationDigest" in entry) || !("computedFloor" in entry) || !("computedReason" in entry) || !("mode" in entry) || !("policyRevision" in entry) || !("userDisposition" in entry)) return false;
+	const resourceDigest = "resourceDigest" in entry ? entry.resourceDigest : undefined;
+	return entry.schemaVersion === 1 &&
+		entry.kind === "deterministic-high-allow-once" &&
+		typeof entry.timestamp === "string" &&
+		typeof entry.sessionId === "string" &&
+		typeof entry.operationDigest === "string" &&
+		(resourceDigest === undefined || typeof resourceDigest === "string") &&
+		entry.computedFloor === "high" &&
+		typeof entry.computedReason === "string" &&
+		isAutonomyMode(entry.mode) &&
+		typeof entry.policyRevision === "string" &&
+		entry.userDisposition === "allow-once";
 }
 
 export class FalsePositiveJournal {
@@ -35,7 +46,7 @@ export class FalsePositiveJournal {
 
 	constructor(agentDirectory: string) {
 		this.directory = join(agentDirectory, "security");
-		this.file = join(this.directory, "false-positive-journal.json");
+		this.file = join(this.directory, "false-positive-journal-v1.json");
 	}
 
 	record(entry: FalsePositiveJournalEntry) {
@@ -74,6 +85,7 @@ export class FalsePositiveJournal {
 		if (Buffer.byteLength(content, "utf8") > MAX_BYTES) throw new Error("False-positive journal exceeds its size limit.");
 		const entries: unknown = JSON.parse(content);
 		if (!Array.isArray(entries)) throw new Error("False-positive journal must contain a JSON array.");
+		if (!entries.every((entry) => hasJournalEntryShape(entry))) throw new Error("False-positive journal contains an unsupported entry shape.");
 		if (entries.length > MAX_ENTRIES) throw new Error("False-positive journal exceeds its entry limit.");
 		return entries;
 	}

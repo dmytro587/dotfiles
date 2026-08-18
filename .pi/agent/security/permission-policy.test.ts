@@ -4,24 +4,28 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { assess } from "./policy.ts";
+import { compileCommandPolicy } from "./bash-policy.ts";
 import type { PermissionPolicyConfig } from "./types.ts";
 
 const policy: PermissionPolicyConfig = {
-	version: 1,
+	version: 2,
 	testedPiVersion: "0.83.0",
-	defaultAutonomy: "auto",
+	defaultAutonomy: "off",
+	commandAllowlist: [],
+	commandDenylist: [],
+	commandBlocklist: [],
 	limits: {
 		maxTextFileBytes: 128,
 		maxOperationBytes: 128,
-		maxPermitRequestBytes: 128,
-		permitTtlMs: 1_000,
 		maxMediumFilesPerSession: 2,
 		maxMediumSnapshotBytesPerSession: 128,
+		maxGitDiffBytes: 1024,
 	},
 };
+const commandPolicy = compileCommandPolicy(policy);
 
 function context(cwd: string, mediumBudget = { fileCount: 0, snapshotBytes: 0 }) {
-	return { cwd, sessionId: "test-session", policyRevision: "sha256:test-policy", policy, mediumBudget };
+	return { cwd, sessionId: "test-session", policyRevision: "sha256:test-policy", policy, commandPolicy, mediumBudget };
 }
 
 test("classifies workspace reads, reversible text mutations, and arbitrary Bash deterministically", async () => {
@@ -92,7 +96,7 @@ test("allows validated globbed search paths while denying protected or escaping 
 test("classifies bounded ripgrep inspection and shell formatting as read-only", async () => {
 	const workspace = await mkdtemp(join(tmpdir(), "pi-permission-rg-"));
 	const safe = context(workspace);
-	const reported = "printf '%s\\n' '--- skills ---'; find .agents/skills -mindepth 1 -maxdepth 1 -type d -printf '%f\\n' | sort; printf '%s\\n' '--- references ---'; rg -n --glob '!node_modules/**' '(alerting-irm|computer-use|orchestration)' . || true; printf '%s\\n' '--- status ---'; git status --short";
+	const reported = "printf '%s\\n' '--- skills ---'; find .agents/skills -mindepth 1 -maxdepth 1 -type d -printf '%f\\n' | sort; printf '%s\\n' '--- references ---'; rg -n --glob '!node_modules/**' '(grafana-alerting-irm|orca-computer-use|orca-orchestration)' . || true; printf '%s\\n' '--- status ---'; git status --short";
 
 	assert.equal((await assess("bash", { command: "sort -o sorted.txt" }, safe)).floor, "high");
 	assert.equal((await assess("bash", { command: reported }, safe)).floor, "low");
@@ -128,7 +132,6 @@ test("applies declarative Bash risk floors without executing commands", async ()
 		"terraform plan",
 		"curl --get https://example.com/api",
 		"ssh host 'git status'",
-		"kubectl exec pod -- cat README.md",
 		"echo result > result.txt",
 	]) {
 		const result = await assess("bash", { command }, safe);
@@ -137,6 +140,7 @@ test("applies declarative Bash risk floors without executing commands", async ()
 	}
 
 	for (const command of [
+		"kubectl exec pod -- cat README.md",
 		"kubectl apply -f deployment.yaml",
 		"terraform apply tfplan",
 		"helm upgrade --install api ./chart",
@@ -160,7 +164,6 @@ test("applies declarative Bash risk floors without executing commands", async ()
 		"git status | rm -rf temporary",
 		"false || git reset --hard",
 		"sh -c 'rm -rf temporary'",
-		"kubectl exec pod -- rm -rf temporary",
 		"docker exec container rm -rf temporary",
 		"ssh host 'rm -rf temporary'",
 		"echo secret > .env",
@@ -221,11 +224,11 @@ test("covers every supported Bash command family with exact argument overrides",
 		"docker stop container",
 		"docker compose up",
 		"kubectl port-forward pod/demo 8080:80",
-		"tar -xf archive.tar",
-		"tar --extract -f archive.tar",
 		"aws s3 cp s3://bucket/data result.txt",
 	];
 	const high = [
+		"tar -xf archive.tar",
+		"tar --extract -f archive.tar",
 		"git switch branch",
 		"docker rm container",
 		"curl --cookie session=token https://example.com/api",
@@ -353,7 +356,7 @@ test("binds an operation digest to the session, policy revision, and exact norma
 	assert.notEqual(first.operationDigest, changedRevision.operationDigest);
 });
 
-test("canonicalizes model-visible tool names for permit matching", async () => {
+test("canonicalizes model-visible tool names for operation assessment", async () => {
 	const workspace = await mkdtemp(join(tmpdir(), "pi-permission-canonical-"));
 	await writeFile(join(workspace, "notes.txt"), "before\n");
 	const input = { path: "notes.txt", edits: [{ oldText: "before", newText: "after" }] };

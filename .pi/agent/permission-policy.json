@@ -1,13 +1,15 @@
 {
-  "version": 1,
+  "version": 2,
   "testedPiVersion": "0.83.0",
-  "defaultAutonomy": "auto",
+  "defaultAutonomy": "off",
+  "commandAllowlist": [],
+  "commandDenylist": [],
+  "commandBlocklist": [],
   "limits": {
     "maxTextFileBytes": 262144,
     "maxOperationBytes": 65536,
-    "maxPermitRequestBytes": 65536,
-    "permitTtlMs": 300000,
     "maxMediumFilesPerSession": 25,
-    "maxMediumSnapshotBytesPerSession": 2097152
+    "maxMediumSnapshotBytesPerSession": 2097152,
+    "maxGitDiffBytes": 1048576
   }
 }

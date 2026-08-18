@@ -2,24 +2,25 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { VERSION, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { loadPermissionPolicy } from "./config.ts";
 import { redactText } from "./audit.ts";
+import { loadPermissionPolicy } from "./config.ts";
 import { PermissionGate } from "./gate.ts";
-import { isAutonomyMode, nextAutonomyMode, type AutonomyMode } from "./types.ts";
 import { isMacOptionLInput } from "./shortcuts.ts";
-import { judgeHighRisk } from "./risk-judge.ts";
-const ENTRY_TYPE = "permission-gate";
-const INTERNAL_TOOLS = new Set(["permission_request", "permission_undo"]);
+import { isAutonomyMode, nextAutonomyMode, type AutonomyMode } from "./types.ts";
 
-function agentDirectory(): string {
+const ENTRY_TYPE = "permission-gate";
+const INTERNAL_TOOLS = new Set(["permission_undo"]);
+
+function agentDirectory() {
 	return process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
 }
 
 
-function describeMode(mode: string): string {
-	if (mode === "high") return "high autonomy: High-risk operations run unattended after deterministic hard denials.";
-	if (mode === "auto") return "auto autonomy: Medium and High work must use permission_request in a prior model turn.";
-	return `${mode} autonomy active.`;
+function describeMode(mode: AutonomyMode) {
+	if (mode === "off") return "off autonomy: Only canonical safe reads run automatically. All other operations require direct approval.";
+	if (mode === "low") return "low autonomy: Low-risk operations run automatically. Medium and High work requires direct approval.";
+	if (mode === "medium") return "medium autonomy: Low and Medium work runs automatically. High work requires direct approval.";
+	return "high autonomy: High-risk operations run unattended after deterministic hard denials.";
 }
 
 export default async function permissionGateExtension(pi: ExtensionAPI): Promise<void> {
@@ -31,6 +32,7 @@ export default async function permissionGateExtension(pi: ExtensionAPI): Promise
 	const gate = new PermissionGate({
 		agentDirectory: directory,
 		policy: loaded.policy,
+		commandPolicy: loaded.commandPolicy,
 		policyRevision: loaded.revision,
 		onAudit(event) {
 			pi.appendEntry(ENTRY_TYPE, { kind: "audit", event });
@@ -42,54 +44,42 @@ export default async function permissionGateExtension(pi: ExtensionAPI): Promise
 	gate.setRuntimeFailure(runtimeFailure);
 	gate.setInheritedRevisionMismatch(inheritedRevision !== undefined && inheritedRevision !== loaded.revision);
 
-	const applyMode = (mode: AutonomyMode, ctx: ExtensionContext) => {
-		if (!gate.setMode(mode)) return;
+	const persistSessionMode = (mode: AutonomyMode, ctx: ExtensionContext) => {
 		pi.appendEntry(ENTRY_TYPE, { kind: "mode", mode });
 		ctx.ui.setStatus(ENTRY_TYPE, `permission: ${mode}`);
 		ctx.ui.notify(describeMode(mode), mode === "high" ? "warning" : "info");
 	};
 
-	pi.registerFlag("permission-autonomy", {
-		description: "Permission autonomy mode: auto, low, medium, or high",
-		type: "string",
+	const applyMode = (mode: AutonomyMode, ctx: ExtensionContext) => {
+		if (!gate.setMode(mode)) return;
+		persistSessionMode(mode, ctx);
+	};
+
+	const directApprovalUi = (ctx: ExtensionContext) => ({
+		hasUI: ctx.hasUI,
+		confirm: (title: string, message: string) => ctx.ui.confirm(title, redactText(message, 1_800)),
+		approveOperation: async (title: string, message: string) => {
+			const choice = await ctx.ui.select(
+				`${title}\n\n${redactText(message, 1_800)}`,
+				["Allow once", "Allow always", "Reject"],
+			);
+			if (choice === "Allow once") return "allow-once";
+			if (choice === "Allow always") return "allow-always";
+			return "deny";
+		},
+		persistMode: async (mode: AutonomyMode) => {
+			try {
+				persistSessionMode(mode, ctx);
+				return true;
+			} catch {
+				return false;
+			}
+		},
 	});
 
-	pi.registerTool({
-		name: "permission_request",
-		label: "Request Permission",
-		description: "Request a one-time permit for one exact future Pi tool call using its canonical Pi name. It never runs the target operation.",
-		promptSnippet: "Request a one-time permit with the canonical target name before Auto-mode Medium or High operations",
-		promptGuidelines: [
-			"In auto autonomy, use permission_request as the only tool call in a turn before any Medium or High operation, then make the exact target call in the following model turn.",
-			"Set toolName to the target's canonical Pi name without a functions. prefix. Model-visible names with one functions. prefix are normalized, but all target arguments must otherwise match exactly.",
-			"permission_request must contain the target tool's complete, exact argument object; changing the target path, command, or content invalidates its one-time permit.",
-			"Set declaredRiskReason to one concise sentence explaining the selected risk from the target's side effects, reversibility, scope, and use of credentials, privilege, or untrusted code.",
-		],
-		parameters: Type.Object({
-			toolName: Type.String({ description: "Canonical target Pi tool name without a functions. prefix" }),
-			input: Type.Record(Type.String(), Type.Any({ description: "Exact target tool argument object" })),
-			declaredRisk: Type.String({ description: "low, medium, or high" }),
-			declaredRiskReason: Type.String({ description: "Why the model selected the declared risk" }),
-			intent: Type.String({ description: "Why the operation is needed" }),
-			expectedEffect: Type.String({ description: "Expected local or external effect" }),
-			rollbackPlan: Type.String({ description: "Proposed rollback; only supported workspace text mutations receive a reversal snapshot" }),
-		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const result = await gate.requestPermission(params, {
-				hasUI: ctx.hasUI,
-				confirm: (title, message) => ctx.ui.confirm(title, redactText(message, 1_800)),
-				approveHighRisk: async (title, message) => {
-					const choice = await ctx.ui.select(
-						`${title}\n\n${redactText(message, 1_800)}`,
-						["Apply and remember", "Reject"],
-					);
-					if (choice === "Apply and remember") return "allow-and-journal";
-					return "deny";
-				},
-				judgeHighRisk: (title, message) => judgeHighRisk(ctx, `${title}\n\n${redactText(message, 1_800)}`),
-			});
-			return { content: [{ type: "text", text: result.message }], details: { permitted: result.ok } };
-		},
+	pi.registerFlag("permission-autonomy", {
+		description: "Permission autonomy mode: off, low, medium, or high",
+		type: "string",
 	});
 
 	pi.registerTool({
@@ -107,14 +97,14 @@ export default async function permissionGateExtension(pi: ExtensionAPI): Promise
 	});
 
 	pi.registerShortcut("alt+l", {
-		description: "Cycle permission autonomy: auto, low, medium, high",
+		description: "Cycle permission autonomy: off, low, medium, high",
 		handler: (ctx) => {
 			applyMode(nextAutonomyMode(gate.getMode()), ctx);
 		},
 	});
 
 	pi.registerCommand("permission-mode", {
-		description: "Show or set permission autonomy: auto, low, medium, or high",
+		description: "Show or set permission autonomy: off, low, medium, or high",
 		handler: async (args, ctx) => {
 			const requested = args.trim();
 			if (!requested) {
@@ -122,7 +112,7 @@ export default async function permissionGateExtension(pi: ExtensionAPI): Promise
 				return;
 			}
 			if (!isAutonomyMode(requested)) {
-				ctx.ui.notify("Usage: /permission-mode auto|low|medium|high", "error");
+				ctx.ui.notify("Usage: /permission-mode off|low|medium|high", "error");
 				return;
 			}
 			applyMode(requested, ctx);
@@ -138,11 +128,10 @@ export default async function permissionGateExtension(pi: ExtensionAPI): Promise
 			return { consume: true };
 		});
 		const flagMode = pi.getFlag("permission-autonomy");
-		let restoredMode: string | undefined;
+		let restoredMode: AutonomyMode | undefined;
 		for (const entry of ctx.sessionManager.getBranch()) {
-			if (entry.type !== "custom" || entry.customType !== ENTRY_TYPE) continue;
-			const data = entry.data as { kind?: unknown; mode?: unknown } | undefined;
-			if (data?.kind === "mode" && isAutonomyMode(data.mode)) restoredMode = data.mode;
+			if (entry.type !== "custom" || entry.customType !== ENTRY_TYPE || entry.data === null || typeof entry.data !== "object" || Array.isArray(entry.data)) continue;
+			if ("kind" in entry.data && entry.data.kind === "mode" && "mode" in entry.data && isAutonomyMode(entry.data.mode)) restoredMode = entry.data.mode;
 		}
 		if (isAutonomyMode(flagMode)) gate.setMode(flagMode);
 		else if (restoredMode) gate.setMode(restoredMode);
@@ -155,13 +144,14 @@ export default async function permissionGateExtension(pi: ExtensionAPI): Promise
 			return { systemPrompt: `${event.systemPrompt}\n\nPermission gate is unavailable: ${runtimeFailure} Do not attempt any tool calls.` };
 		}
 		const mode = gate.getMode();
-		const identityRule = "For permission_request, set toolName to the target's canonical Pi name without a functions. prefix. A model-visible functions. prefix is normalized once; the target arguments must otherwise match exactly. Provide declaredRiskReason as one concise explanation for the selected risk.";
-		const protocol = mode === "auto"
-			? "For a Medium or High operation, call permission_request alone first and wait for its result. In the next model turn, call exactly the permitted target. Never place permission_request and its target in the same assistant response."
-			: mode === "high"
-				? "High autonomy is explicitly unattended. Hard-denied protected data and ambiguous paths remain blocked, and every tool call is audited."
-				: "Follow the active deterministic permission policy; unsupported risk classes will be blocked.";
-		return { systemPrompt: `${event.systemPrompt}\n\nPermission policy (${mode}): ${identityRule} ${protocol}` };
+		const protocol = mode === "off"
+			? "Only canonical safe reads are automatic. The trusted runtime will ask the user directly before every other operation."
+			: mode === "low"
+				? "Low-risk operations run automatically. The trusted runtime will ask the user directly before Medium or High work."
+				: mode === "medium"
+					? "Low and Medium operations run automatically. The trusted runtime will ask the user directly before High work."
+					: "High autonomy is explicitly unattended. Hard-denied protected data and ambiguous paths remain blocked, and every tool call is audited.";
+		return { systemPrompt: `${event.systemPrompt}\n\nPermission policy (${mode}): ${protocol}` };
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
@@ -172,18 +162,7 @@ export default async function permissionGateExtension(pi: ExtensionAPI): Promise
 				toolCallId: event.toolCallId,
 				toolName: event.toolName,
 				input: event.input as Record<string, unknown>,
-			}, {
-				hasUI: ctx.hasUI,
-				confirm: (title, message) => ctx.ui.confirm(title, redactText(message, 1_800)),
-				approveHighRisk: async (title, message) => {
-					const choice = await ctx.ui.select(
-						`${title}\n\n${redactText(message, 1_800)}`,
-						["Apply and remember", "Reject"],
-					);
-					return choice === "Apply and remember" ? "allow-and-journal" : "deny";
-				},
-				judgeHighRisk: (title, message) => judgeHighRisk(ctx, `${title}\n\n${redactText(message, 1_800)}`),
-			});
+			}, directApprovalUi(ctx));
 		} catch {
 			return { block: true, reason: "Permission gate failed while assessing this operation." };
 		}

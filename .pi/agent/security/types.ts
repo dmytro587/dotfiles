@@ -1,25 +1,28 @@
 export const RISK_CLASSES = ["low", "medium", "high"] as const;
 export type RiskClass = (typeof RISK_CLASSES)[number];
 
-export const AUTONOMY_MODES = ["auto", "low", "medium", "high"] as const;
+export const AUTONOMY_MODES = ["off", "low", "medium", "high"] as const;
 export type AutonomyMode = (typeof AUTONOMY_MODES)[number];
-export type HighRiskApproval = "allow" | "allow-and-journal" | "deny";
-export interface RiskJudgment {
-	risk: RiskClass;
-	reason: string;
+export type OperationApproval = "allow-once" | "allow-always" | "deny";
+
+export interface ShieldPlan {
+	kind: "commit" | "push";
+	args: readonly string[];
 }
 
 export interface PermissionPolicyConfig {
-	version: 1;
+	version: 2;
 	testedPiVersion: string;
 	defaultAutonomy: AutonomyMode;
+	commandAllowlist: string[];
+	commandDenylist: string[];
+	commandBlocklist: string[];
 	limits: {
 		maxTextFileBytes: number;
 		maxOperationBytes: number;
-		maxPermitRequestBytes: number;
-		permitTtlMs: number;
 		maxMediumFilesPerSession: number;
 		maxMediumSnapshotBytesPerSession: number;
+		maxGitDiffBytes: number;
 	};
 }
 
@@ -47,6 +50,9 @@ export interface Assessment {
 	journalAdapter: "none" | "workspace-text";
 	reversible: boolean;
 	hardDeny: boolean;
+	offAllowed: boolean;
+	forceConfirmation: boolean;
+	shieldPlans: readonly ShieldPlan[];
 	reason: string;
 	resource?: CanonicalPath;
 	resourceDigest?: string;
@@ -55,43 +61,20 @@ export interface Assessment {
 	predictedSnapshotBytes: number;
 }
 
-export interface Permit {
-	operationDigest: string;
-	resourceDigest?: string;
-	sessionId: string;
-	toolName: string;
-	declaredRisk: RiskClass;
-	declaredRiskReason: string;
-	effectiveRisk: RiskClass;
-	approval: "not-required" | "confirmed" | "confirmed-and-journaled" | "mode-high";
-	expiresAt: number;
-}
-
-export interface PermissionRequest {
-	toolName: string;
-	input: Record<string, unknown>;
-	declaredRisk: RiskClass;
-	declaredRiskReason: string;
-	intent: string;
-	expectedEffect: string;
-	rollbackPlan: string;
-}
-
 export interface AuditEvent {
 	timestamp: string;
 	sessionId: string;
 	operationDigest: string;
 	resourceDigest?: string;
 	tool: string;
-	declaredRisk?: RiskClass;
-	declaredRiskReason?: string;
 	computedFloor: RiskClass;
 	effectiveRisk: RiskClass;
 	mode: AutonomyMode;
 	decision: string;
-	approval: "not-required" | "confirmed" | "confirmed-and-journaled" | "mode-high" | "denied";
+	approval: "not-required" | "allow-once" | "allow-always" | "denied";
 	policyRevision: string;
 	reason: string;
+	reversible: boolean;
 }
 
 export function isRiskClass(value: unknown): value is RiskClass {
@@ -107,10 +90,18 @@ export function nextAutonomyMode(mode: AutonomyMode) {
 	return AUTONOMY_MODES[(index + 1) % AUTONOMY_MODES.length]!;
 }
 
-export function riskRank(risk: RiskClass): number {
+export function autonomyRank(mode: AutonomyMode) {
+	return AUTONOMY_MODES.indexOf(mode);
+}
+
+export function stricterAutonomyMode(mode: AutonomyMode, risk: RiskClass) {
+	return autonomyRank(mode) >= autonomyRank(risk) ? mode : risk;
+}
+
+export function riskRank(risk: RiskClass) {
 	return RISK_CLASSES.indexOf(risk);
 }
 
-export function maxRisk(left: RiskClass, right: RiskClass): RiskClass {
+export function maxRisk(left: RiskClass, right: RiskClass) {
 	return riskRank(left) >= riskRank(right) ? left : right;
 }

@@ -35,16 +35,18 @@ test("loads the explicitly configured permission extension on the pinned Pi runt
 	await writeFile(
 		join(agentDirectory, "permission-policy.json"),
 		JSON.stringify({
-			version: 1,
+			version: 2,
 			testedPiVersion: "0.83.0",
-			defaultAutonomy: "auto",
+			defaultAutonomy: "off",
+			commandAllowlist: [],
+			commandDenylist: [],
+			commandBlocklist: [],
 			limits: {
 				maxTextFileBytes: 262144,
 				maxOperationBytes: 65536,
-				maxPermitRequestBytes: 65536,
-				permitTtlMs: 300000,
 				maxMediumFilesPerSession: 25,
 				maxMediumSnapshotBytesPerSession: 2097152,
+				maxGitDiffBytes: 1048576,
 			},
 		}),
 	);
@@ -54,7 +56,7 @@ test("loads the explicitly configured permission extension on the pinned Pi runt
 	assert.equal(result.code, 0, result.stderr);
 	assert.equal(result.stderr, "");
 	assert.match(result.stdout, /"statusKey":"permission-gate"/);
-	assert.match(result.stdout, /"statusText":"permission: auto"/);
+	assert.match(result.stdout, /"statusText":"permission: off"/);
 
 	const high = await runPi(agentDirectory, ["--permission-autonomy", "high"]);
 	assert.equal(high.code, 0, high.stderr);

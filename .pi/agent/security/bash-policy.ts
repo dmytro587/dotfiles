@@ -1,29 +1,122 @@
 import { basename } from "node:path";
 import { canonicalizePath, isProtectedPathPattern, isProtectedResource } from "./canonical.ts";
 import { assessGhCommand } from "./gh-policy.ts";
-import { maxRisk, riskRank, type RiskClass } from "./types.ts";
+import { maxRisk, riskRank, type RiskClass, type ShieldPlan } from "./types.ts";
 
 type ShellToken = {
 	value: string;
 	quoted: boolean;
 };
 
+type ParsedCommand = {
+	segments: ShellToken[][];
+	error?: string;
+	hasOperator: boolean;
+};
+
 type BashAssessment = {
 	floor: RiskClass;
 	hardDeny: boolean;
+	forceConfirmation: boolean;
+	offAllowed: boolean;
 	reason: string;
+	shieldPlans: readonly ShieldPlan[];
 };
 
-const LOW = (reason: string) => ({ floor: "low" as const, hardDeny: false, reason });
-const MEDIUM = (reason: string) => ({ floor: "medium" as const, hardDeny: false, reason });
-const HIGH = (reason: string, hardDeny = false) => ({ floor: "high" as const, hardDeny, reason });
+export interface CommandSignature {
+	executable: string;
+	args: readonly string[];
+	key: string;
+}
 
-function tokenize(command: string) {
+export class CommandSignatureSet {
+	readonly #values: Set<string>;
+
+	constructor(values: Iterable<string>) {
+		this.#values = new Set(values);
+		Object.freeze(this);
+	}
+
+	has(value: string) {
+		return this.#values.has(value);
+	}
+}
+
+export interface CompiledCommandPolicy {
+	allowlist: CommandSignatureSet;
+	denylist: CommandSignatureSet;
+	blocklist: CommandSignatureSet;
+}
+
+export const EMPTY_COMMAND_POLICY: CompiledCommandPolicy = Object.freeze({
+	allowlist: new CommandSignatureSet([]),
+	denylist: new CommandSignatureSet([]),
+	blocklist: new CommandSignatureSet([]),
+});
+
+function assessment(floor: RiskClass, reason: string, hardDeny = false): BashAssessment {
+	return {
+		floor,
+		hardDeny,
+		forceConfirmation: false,
+		offAllowed: false,
+		reason,
+		shieldPlans: [],
+	};
+}
+
+const LOW = (reason: string) => assessment("low", reason);
+const MEDIUM = (reason: string) => assessment("medium", reason);
+const HIGH = (reason: string, hardDeny = false) => assessment("high", reason, hardDeny);
+
+function isEnvironmentAssignment(value: string) {
+	return /^[A-Za-z_][A-Za-z0-9_]*=/.test(value);
+}
+
+function hasEnvironmentAssignmentBeforeExecutable(tokens: ShellToken[]) {
+	let index = 0;
+	while (index < tokens.length) {
+		if (isEnvironmentAssignment(tokens[index]!.value)) return true;
+		const wrapper = tokens[index]!.value;
+		if (wrapper !== "command" && wrapper !== "env" && wrapper !== "time") return false;
+		index += 1;
+		while (tokens[index]?.value.startsWith("-")) {
+			const option = tokens[index]!.value;
+			index += 1;
+			if ((wrapper === "env" && (option === "-u" || option === "--unset")) || (wrapper === "time" && option === "-f")) index += 1;
+		}
+	}
+	return false;
+}
+
+function commandKey(executable: string, args: readonly string[]) {
+	return JSON.stringify([executable, ...args]);
+}
+
+function literalSignature(tokens: ShellToken[]): CommandSignature | undefined {
+	if (tokens.length === 0 || tokens.some((token) => /[$`*?\[\]{}]/.test(token.value))) return;
+	const executable = tokens[0]!.value;
+	if (
+		executable === "" ||
+		/\s/.test(executable) ||
+		/[\\/]/.test(executable) ||
+		executable.startsWith("-") ||
+		isEnvironmentAssignment(executable) ||
+		["command", "env", "time"].includes(executable)
+	) {
+		return;
+	}
+	const args = tokens.slice(1).map((token) => token.value);
+	return { executable, args, key: commandKey(executable, args) };
+}
+
+function tokenize(command: string): ParsedCommand {
 	const segments: ShellToken[][] = [];
 	let tokens: ShellToken[] = [];
 	let value = "";
 	let quoted = false;
 	let quote: "'" | '"' | undefined;
+	let hasOperator = false;
 
 	const pushToken = () => {
 		if (value === "") return;
@@ -37,7 +130,7 @@ function tokenize(command: string) {
 		tokens = [];
 	};
 
-	if (/`|\$\(|<\(/.test(command)) return { segments, error: "Command or process substitution cannot be classified safely." };
+	if (/`|\$\(|<\(/.test(command)) return { segments, error: "Command or process substitution cannot be classified safely.", hasOperator: true };
 	for (let index = 0; index < command.length; index += 1) {
 		const character = command[index]!;
 		if (quote) {
@@ -47,7 +140,7 @@ function tokenize(command: string) {
 			}
 			if (character === "\\" && quote === '"') {
 				const escaped = command[index + 1];
-				if (escaped === undefined) return { segments, error: "Unterminated escape sequence cannot be classified safely." };
+				if (escaped === undefined) return { segments, error: "Unterminated escape sequence cannot be classified safely.", hasOperator };
 				value += escaped;
 				index += 1;
 				continue;
@@ -62,7 +155,7 @@ function tokenize(command: string) {
 		}
 		if (character === "\\") {
 			const escaped = command[index + 1];
-			if (escaped === undefined) return { segments, error: "Unterminated escape sequence cannot be classified safely." };
+			if (escaped === undefined) return { segments, error: "Unterminated escape sequence cannot be classified safely.", hasOperator };
 			value += escaped;
 			index += 1;
 			continue;
@@ -72,23 +165,27 @@ function tokenize(command: string) {
 			continue;
 		}
 		if (character === ";" || character === "\n") {
+			hasOperator = true;
 			endSegment();
 			continue;
 		}
 		if (character === "|") {
+			hasOperator = true;
 			endSegment();
 			if (command[index + 1] === "|") index += 1;
 			continue;
 		}
 		if (character === "&") {
-			if (command[index + 1] !== "&") return { segments, error: "Background shell operators cannot be classified safely." };
+			hasOperator = true;
+			if (command[index + 1] !== "&") return { segments, error: "Background shell operators cannot be classified safely.", hasOperator };
 			endSegment();
 			index += 1;
 			continue;
 		}
 		if (character === ">" || character === "<") {
+			hasOperator = true;
 			pushToken();
-			if (character === "<" && command[index + 1] === "<") return { segments, error: "Here documents cannot be classified safely." };
+			if (character === "<" && command[index + 1] === "<") return { segments, error: "Here documents cannot be classified safely.", hasOperator };
 			if (character === ">" && command[index + 1] === ">") {
 				tokens.push({ value: ">>", quoted: false });
 				index += 1;
@@ -97,14 +194,66 @@ function tokenize(command: string) {
 			}
 			continue;
 		}
-		if (character === "(" || character === ")") return { segments, error: "Compound shell syntax cannot be classified safely." };
+		if (character === "(" || character === ")") return { segments, error: "Compound shell syntax cannot be classified safely.", hasOperator: true };
 		value += character;
 	}
-	if (quote) return { segments, error: "Unterminated quoting cannot be classified safely." };
+	if (quote) return { segments, error: "Unterminated quoting cannot be classified safely.", hasOperator };
 	endSegment();
-	return { segments };
+	return { segments, hasOperator };
 }
 
+export function parseCommandListEntry(value: unknown): CommandSignature | undefined {
+	if (typeof value !== "string" || value.trim() === "") return;
+	const parsed = tokenize(value);
+	if (parsed.error || parsed.hasOperator || parsed.segments.length !== 1) return;
+	return literalSignature(parsed.segments[0]!);
+}
+
+export function compileCommandPolicy(lists: {
+	commandAllowlist: readonly string[];
+	commandDenylist: readonly string[];
+	commandBlocklist: readonly string[];
+}): CompiledCommandPolicy {
+	const compile = (entries: readonly string[]) => {
+		const signatures: string[] = [];
+		for (const entry of entries) {
+			const parsed = parseCommandListEntry(entry);
+			if (!parsed) throw new Error("Command policy contains an invalid literal command entry.");
+			signatures.push(parsed.key);
+		}
+		return new CommandSignatureSet(signatures);
+	};
+	return Object.freeze({
+		allowlist: compile(lists.commandAllowlist),
+		denylist: compile(lists.commandDenylist),
+		blocklist: compile(lists.commandBlocklist),
+	});
+}
+
+
+function mergeShieldPlans(left: readonly ShieldPlan[], right: readonly ShieldPlan[]) {
+	const seen = new Set<string>();
+	const plans: ShieldPlan[] = [];
+	for (const plan of [...left, ...right]) {
+		const key = commandKey(plan.kind, plan.args);
+		if (seen.has(key)) continue;
+		seen.add(key);
+		plans.push(plan);
+	}
+	return plans;
+}
+
+function combine(left: BashAssessment, right: BashAssessment): BashAssessment {
+	const floor = maxRisk(left.floor, right.floor);
+	return {
+		floor,
+		hardDeny: left.hardDeny || right.hardDeny,
+		forceConfirmation: left.forceConfirmation || right.forceConfirmation,
+		offAllowed: left.offAllowed && right.offAllowed,
+		reason: riskRank(right.floor) >= riskRank(left.floor) ? right.reason : left.reason,
+		shieldPlans: mergeShieldPlans(left.shieldPlans, right.shieldPlans),
+	};
+}
 
 function referencesProtectedData(token: string) {
 	const normalized = token.replace(/\\/g, "/").toLowerCase();
@@ -159,30 +308,19 @@ function carriesCredential(tokens: ShellToken[], command: string) {
 }
 
 function isGcloudInventory(args: string[]) {
-	return args[0] === "projects" && args[1] === "list" ||
-		args[0] === "compute" && args[1] === "instances" && args[2] === "list";
+	const [service, subcommand, action] = args;
+	return service === "projects" && subcommand === "list" ||
+		service === "compute" && subcommand === "instances" && action === "list";
 }
 
 function isAzureInventory(args: string[]) {
-	return args[0] === "account" && args[1] === "show" || args[1] === "list";
-}
-
-function combine(left: BashAssessment, right: BashAssessment) {
-	const floor = maxRisk(left.floor, right.floor);
-	return {
-		floor,
-		hardDeny: left.hardDeny || right.hardDeny,
-		reason: riskRank(right.floor) >= riskRank(left.floor) ? right.reason : left.reason,
-	};
+	const [service, subcommand] = args;
+	return service === "account" && subcommand === "show" || subcommand === "list";
 }
 
 function stripTransparentPrefix(tokens: ShellToken[]) {
 	let index = 0;
 	while (index < tokens.length) {
-		if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[index]!.value)) {
-			index += 1;
-			continue;
-		}
 		const wrapper = tokens[index]!.value;
 		if (wrapper !== "command" && wrapper !== "env" && wrapper !== "time") break;
 		index += 1;
@@ -230,10 +368,186 @@ async function assessWorkspaceDownload(destination: string | undefined, cwd: str
 	}
 }
 
-function hasDockerPrivilegeOrHostMount(args: string[]) {
+const CAT_OPTIONS: Record<string, true> = {
+	"-A": true,
+	"-b": true,
+	"-e": true,
+	"-E": true,
+	"-n": true,
+	"-s": true,
+	"-t": true,
+	"-T": true,
+	"-u": true,
+	"-v": true,
+};
+const LS_OPTIONS: Record<string, true> = {
+	"-a": true,
+	"-A": true,
+	"-C": true,
+	"-d": true,
+	"-h": true,
+	"-l": true,
+	"-r": true,
+	"-R": true,
+	"-S": true,
+	"-t": true,
+	"-1": true,
+	"--all": true,
+	"--almost-all": true,
+	"--classify": true,
+	"--directory": true,
+	"--human-readable": true,
+	"--literal": true,
+	"--recursive": true,
+	"--size": true,
+};
+const WC_OPTIONS: Record<string, true> = {
+	"-c": true,
+	"-l": true,
+	"-L": true,
+	"-m": true,
+	"-w": true,
+	"--bytes": true,
+	"--chars": true,
+	"--lines": true,
+	"--max-line-length": true,
+	"--words": true,
+};
+const DU_OPTIONS: Record<string, true> = {
+	"-a": true,
+	"-c": true,
+	"-h": true,
+	"-H": true,
+	"-k": true,
+	"-m": true,
+	"-s": true,
+	"-S": true,
+	"-x": true,
+	"--all": true,
+	"--bytes": true,
+	"--human-readable": true,
+	"--summarize": true,
+};
+
+function hasOnlyShortOptions(value: string, allowed: Record<string, true>) {
+	if (!value.startsWith("-") || value === "-") return false;
+	return [...value.slice(1)].every((flag) => allowed[`-${flag}`]);
+}
+
+async function assessReaderOperands(operands: string[], cwd: string, command: string) {
+	for (const operand of operands) {
+		if (operand === "-") return HIGH(`${command} stdin input cannot be classified safely.`);
+		try {
+			const resource = await canonicalizePath(operand, cwd);
+			if (isProtectedResource(resource)) return HIGH(`Protected ${command} paths are outside the permission gate's authority.`, true);
+		} catch {
+			return HIGH(`Ambiguous, symlinked, or out-of-workspace ${command} paths are denied.`, true);
+		}
+	}
+	return LOW(`${command} inspection is read-only.`);
+}
+
+async function assessReaderCommand(command: string, args: string[], cwd: string) {
+	if (command === "find") {
+		const expressionIndex = args.findIndex((argument) => argument.startsWith("-") || argument === "!" || argument === "(");
+		const roots = expressionIndex < 0 ? args : args.slice(0, expressionIndex);
+		return assessReaderOperands(roots.length > 0 ? roots : ["."], cwd, command);
+	}
+
+	const options = command === "cat" ? CAT_OPTIONS : command === "ls" ? LS_OPTIONS : command === "wc" ? WC_OPTIONS : DU_OPTIONS;
+	const operands: string[] = [];
+	let optionsEnded = false;
+	for (const argument of args) {
+		if (!optionsEnded && argument === "--") {
+			optionsEnded = true;
+			continue;
+		}
+		if (!optionsEnded && argument.startsWith("-") && argument !== "-") {
+			if (options[argument] || hasOnlyShortOptions(argument, options)) continue;
+			return HIGH(`Unsupported ${command} options cannot be classified safely.`);
+		}
+		operands.push(argument);
+	}
+	if (command === "cat" || command === "wc") {
+		if (operands.length === 0) return HIGH(`${command} without a literal file reads stdin.`);
+		return assessReaderOperands(operands, cwd, command);
+	}
+	return assessReaderOperands(operands.length > 0 ? operands : ["."], cwd, command);
+}
+
+async function assessHttpOutput(command: "curl" | "wget", args: string[], cwd: string) {
+	const destinations: string[] = [];
+	for (let index = 0; index < args.length; index += 1) {
+		const argument = args[index]!;
+		if (command === "curl") {
+			if (argument === "-o" || argument === "--output") {
+				const destination = args[index + 1];
+				if (!destination) return HIGH("Curl output options require a literal workspace file target.");
+				destinations.push(destination);
+				index += 1;
+				continue;
+			}
+			if (argument.startsWith("-o") && argument !== "-o") {
+				destinations.push(argument.slice(2));
+				continue;
+			}
+			if (argument.startsWith("--output=")) {
+				destinations.push(argument.slice("--output=".length));
+				continue;
+			}
+			if (["-O", "--remote-name", "--remote-name-all", "--remote-header-name", "--output-dir"].includes(argument) || argument.startsWith("--output-dir=")) {
+				return HIGH("Curl output names derived from remote data cannot be classified safely.");
+			}
+			continue;
+		}
+		if (argument === "-O" || argument === "--output-document") {
+			const destination = args[index + 1];
+			if (!destination) return HIGH("Wget output options require a literal workspace file target.");
+			destinations.push(destination);
+			index += 1;
+			continue;
+		}
+		if (argument.startsWith("-O") && argument !== "-O") {
+			destinations.push(argument.slice(2));
+			continue;
+		}
+		if (argument.startsWith("--output-document=")) {
+			destinations.push(argument.slice("--output-document=".length));
+			continue;
+		}
+		if (["-P", "--directory-prefix"].includes(argument) || argument.startsWith("-P") || argument.startsWith("--directory-prefix=")) {
+			return HIGH("Wget output names derived from remote data cannot be classified safely.");
+		}
+	}
+	if (command === "wget" && destinations.length === 0) return HIGH("Wget requires a literal output file target.");
+	if (destinations.length === 0) return;
+	let result = MEDIUM("HTTP download output is bounded to workspace files.");
+	for (const destination of destinations) result = combine(result, await assessWorkspaceDownload(destination, cwd));
+	return result;
+}
+
+async function hostMountSourceEscapesWorkspace(source: string, cwd: string) {
+	if (!source.includes("/") && !source.includes("\\") && !source.startsWith(".") && !source.startsWith("~")) return false;
+	try {
+		const resource = await canonicalizePath(source, cwd);
+		return isProtectedResource(resource);
+	} catch {
+		return true;
+	}
+}
+
+async function hasDockerHostEscape(args: string[], cwd: string) {
 	for (let index = 0; index < args.length; index += 1) {
 		const argument = args[index]!;
 		if (argument === "--privileged") return true;
+		const value = argument.includes("=") ? argument.slice(argument.indexOf("=") + 1) : args[index + 1];
+		if (
+			(["--pid", "--network", "--ipc", "--uts", "--cgroupns"].includes(argument.split("=", 1)[0]!) && value === "host") ||
+			(argument.split("=", 1)[0] === "--cap-add" && value?.toUpperCase() === "SYS_ADMIN")
+		) {
+			return true;
+		}
+		if (["--pid", "--network", "--ipc", "--uts", "--cgroupns", "--cap-add"].includes(argument)) index += 1;
 		let spec: string | undefined;
 		let mountSyntax = false;
 		if (argument === "-v" || argument === "--volume") {
@@ -250,16 +564,19 @@ function hasDockerPrivilegeOrHostMount(args: string[]) {
 		} else if (argument.startsWith("--mount=")) {
 			spec = argument.slice("--mount=".length);
 			mountSyntax = true;
-		} else {
-			continue;
 		}
+		if (spec === undefined) continue;
 		if (!spec) return true;
 		if (mountSyntax) {
-			if (/(?:^|,)type=volume(?:,|$)/.test(spec)) continue;
-			return true;
+			const fields = spec.split(",").map((field) => field.split("=", 2));
+			const type = fields.find(([key]) => key === "type")?.[1];
+			const source = fields.find(([key]) => key === "source" || key === "src")?.[1];
+			if (type === "bind" && !source) return true;
+			if (source && await hostMountSourceEscapesWorkspace(source, cwd)) return true;
+			continue;
 		}
 		const source = spec.split(":", 1)[0]!;
-		if (source.startsWith("/") || source.startsWith(".") || source.startsWith("~") || source.includes("..")) return true;
+		if (await hostMountSourceEscapesWorkspace(source, cwd)) return true;
 	}
 	return false;
 }
@@ -410,14 +727,81 @@ function nestedCommand(tokens: ShellToken[]) {
 	return text === "" ? undefined : text;
 }
 
-async function assessNestedCommand(tokens: ShellToken[], cwd: string, outer: BashAssessment) {
+function applyCommandPolicy(
+	signature: CommandSignature | undefined,
+	deterministic: BashAssessment,
+	commandPolicy: CompiledCommandPolicy,
+): BashAssessment {
+	if (!signature) return deterministic;
+	if (commandPolicy.blocklist.has(signature.key)) return HIGH("Exact command is blocklisted.", true);
+	if (deterministic.hardDeny) return deterministic;
+	if (commandPolicy.denylist.has(signature.key)) {
+		return {
+			...deterministic,
+			forceConfirmation: true,
+			offAllowed: false,
+			reason: `${deterministic.reason} Exact command is denylisted and requires direct confirmation.`,
+		};
+	}
+	if (commandPolicy.allowlist.has(signature.key)) {
+		return {
+			...deterministic,
+			floor: "low",
+			forceConfirmation: false,
+			offAllowed: true,
+			reason: "Exact command is allowlisted.",
+		};
+	}
+	return deterministic;
+}
+
+function shieldPlansFor(signature: CommandSignature | undefined) {
+	if (!signature || signature.executable !== "git") return [];
+	if (signature.args[0] !== "commit" && signature.args[0] !== "push") return [];
+	return [{ kind: signature.args[0], args: [...signature.args] }];
+}
+
+function hasUnsupportedDockerOption(args: string[]) {
+	const subcommandIndex = args.findIndex((argument) => !argument.startsWith("-"));
+	if (subcommandIndex < 0) return false;
+	const subcommand = args[subcommandIndex]!;
+	for (let index = subcommandIndex + 1; index < args.length; index += 1) {
+		const argument = args[index]!;
+		if (!argument.startsWith("-")) {
+			if (subcommand === "exec" || subcommand === "run" || subcommand === "build" || subcommand === "pull" || subcommand === "stop") break;
+			continue;
+		}
+		if (argument === "-d" || argument === "--detach" || argument === "--rm") continue;
+		if (argument === "--name" || argument === "-v" || argument === "--volume" || argument === "--mount") {
+			index += 1;
+			continue;
+		}
+		if (argument.startsWith("--name=") || argument.startsWith("-v") || argument.startsWith("--volume=") || argument.startsWith("--mount=")) continue;
+		return true;
+	}
+	return false;
+}
+
+function isTarExtraction(args: string[]) {
+	return args.some((argument, index) =>
+		argument === "--extract" ||
+		argument.startsWith("--extract=") ||
+		/^-[A-Za-z]*x[A-Za-z]*$/.test(argument) ||
+		index === 0 && /^[A-Za-z]*x[A-Za-z]*$/.test(argument),
+	);
+}
+
+async function assessNestedCommand(tokens: ShellToken[], cwd: string, outer: BashAssessment, commandPolicy: CompiledCommandPolicy) {
 	const command = nestedCommand(tokens);
 	if (!command || tokens.some((token) => /[$`]/.test(token.value))) return HIGH("Non-literal nested shell commands cannot be classified safely.");
-	const nested = await assessBashCommand(command, cwd);
+	const nested = await assessBashCommand(command, cwd, commandPolicy);
 	return combine(outer, nested);
 }
 
-async function classifyCommand(tokens: ShellToken[], cwd: string): Promise<BashAssessment> {
+async function classifyCommand(tokens: ShellToken[], cwd: string, commandPolicy: CompiledCommandPolicy): Promise<BashAssessment> {
+	const signature = literalSignature(tokens);
+	if (signature && commandPolicy.blocklist.has(signature.key)) return HIGH("Exact command is blocklisted.", true);
+	if (hasEnvironmentAssignmentBeforeExecutable(tokens)) return HIGH("Environment assignments are High risk.");
 	const executableTokens = stripTransparentPrefix(tokens);
 	if (executableTokens.length === 0) return HIGH("An empty shell segment cannot be classified safely.");
 	const executable = executableTokens[0]!.value;
@@ -436,7 +820,7 @@ async function classifyCommand(tokens: ShellToken[], cwd: string): Promise<BashA
 	if (carriesCredential(tokens, command) && !(command === "gh" && args[0] === "auth" && args[1] === "token")) return HIGH("Credential-bearing command arguments are High risk.");
 	if (findActionIndex >= 0) {
 		const nestedTokens = executableTokens.slice(findActionIndex + 2).filter((token) => token.value !== "{}" && token.value !== ";");
-		return combine(HIGH("Find execution actions cannot be classified safely."), await classifyCommand(nestedTokens, cwd));
+		return combine(HIGH("Find execution actions cannot be classified safely."), await classifyCommand(nestedTokens, cwd, commandPolicy));
 	}
 	const destructive = destructiveCommand(command, args);
 	if (destructive) return destructive;
@@ -446,7 +830,7 @@ async function classifyCommand(tokens: ShellToken[], cwd: string): Promise<BashA
 	if (["sh", "bash"].includes(command) && args.includes("-c")) {
 		const payload = executableTokens[args.indexOf("-c") + 2];
 		classified = payload
-			? combine(MEDIUM("Literal shell payload is classified recursively."), await assessBashCommand(payload.value, cwd))
+			? combine(MEDIUM("Literal shell payload is classified recursively."), await assessBashCommand(payload.value, cwd, commandPolicy))
 			: HIGH("Shell -c requires a literal command payload.");
 	} else if (["eval", "source", ".", "xargs"].includes(command) || (args.includes("-c") && ["node", "python", "python3", "ruby", "perl", "php", "lua"].includes(command)) || (args.includes("-e") && ["node", "ruby", "perl", "php", "lua"].includes(command))) {
 		classified = HIGH("Dynamic command evaluation cannot be classified safely.");
@@ -459,16 +843,16 @@ async function classifyCommand(tokens: ShellToken[], cwd: string): Promise<BashA
 			const optionValue = option === "-o" ? args[hostIndex + 1] : option.startsWith("-o") ? option.slice(2) : undefined;
 			if (optionValue && /^(?:proxycommand|localcommand|remotecommand|match)=/i.test(optionValue)) {
 				const payload = optionValue.slice(optionValue.indexOf("=") + 1);
-				return combine(MEDIUM("SSH command options are classified recursively."), await assessBashCommand(payload, cwd));
+				return combine(MEDIUM("SSH command options are classified recursively."), await assessBashCommand(payload, cwd, commandPolicy));
 			}
 			if (option === "-F" || option.startsWith("-F")) return HIGH("SSH configuration files are outside the permission gate's authority.", true);
 			hostIndex += ["-p", "-i", "-l", "-o"].includes(option) ? 2 : 1;
 		}
 		const remoteTokens = executableTokens.slice(hostIndex + 2);
-		const remote = await assessNestedCommand(remoteTokens, cwd, MEDIUM("A proven read-only remote SSH command remains a bounded external operation."));
+		const remote = await assessNestedCommand(remoteTokens, cwd, MEDIUM("A proven read-only remote SSH command remains a bounded external operation."), commandPolicy);
 		const structuredRemoteTokens = stripTransparentPrefix(remoteTokens);
 		classified = ["sh", "bash"].includes(basename(structuredRemoteTokens[0]?.value ?? ""))
-			? combine(remote, await classifyCommand(remoteTokens, cwd))
+			? combine(remote, await classifyCommand(remoteTokens, cwd, commandPolicy))
 			: remote;
 	} else if (command === "scp") {
 		const source = args.at(-2);
@@ -476,7 +860,7 @@ async function classifyCommand(tokens: ShellToken[], cwd: string): Promise<BashA
 		classified = source?.includes(":") && destination && !destination.includes(":")
 			? await assessWorkspaceDownload(destination, cwd)
 			: HIGH("SCP uploads and ambiguous transfers are High risk.");
-	} else if (["curl", "wget"].includes(command)) {
+	} else if (command === "curl" || command === "wget") {
 		const mutating = args.some((argument, index) => {
 			if (["-d", "--data", "--data-raw", "-F", "--form", "-T", "--upload-file", "--post-data", "--post-file"].includes(argument)) return true;
 			if (/^(?:-d|-F|-T|--data(?:-raw)?=|--form=|--upload-file=|--post-(?:data|file)=)/.test(argument)) return true;
@@ -486,9 +870,11 @@ async function classifyCommand(tokens: ShellToken[], cwd: string): Promise<BashA
 			return method !== undefined && !["GET", "HEAD"].includes(method.toUpperCase());
 		});
 		const url = args.find((argument) => /^https?:\/\//i.test(argument));
-		classified = mutating ? HIGH("HTTP mutations are High risk.") : url && publicHttpUrl(url)
+		const output = await assessHttpOutput(command, args, cwd);
+		const request = mutating ? HIGH("HTTP mutations are High risk.") : url && publicHttpUrl(url)
 			? MEDIUM("Public HTTP GET and HEAD requests are bounded external operations.")
 			: HIGH("Only literal public HTTP GET and HEAD requests are supported.");
+		classified = output ? combine(request, output) : request;
 	} else if (command === "git") {
 		const subcommand = args[0];
 		classified = ["status", "diff", "log", "show", "grep"].includes(subcommand ?? "") || (subcommand === "branch" && args.includes("--show-current")) || subcommand === "fetch"
@@ -498,11 +884,8 @@ async function classifyCommand(tokens: ShellToken[], cwd: string): Promise<BashA
 				: HIGH("Git writes and unknown subcommands are High risk.");
 	} else if (command === "kubectl") {
 		const subcommand = args[0];
-		if (subcommand === "exec") {
-			const separator = args.indexOf("--");
-			classified = separator < 0
-				? HIGH("Kubectl exec requires a literal nested command.")
-				: combine(MEDIUM("Kubectl exec is a bounded remote operation when its nested command is proven safe."), await classifyCommand(executableTokens.slice(separator + 2), cwd));
+		if (args.includes("exec")) {
+			classified = HIGH("Kubectl exec is High risk.");
 		} else if (subcommand === "config" && ["current-context", "get-contexts"].includes(args[1] ?? "")) {
 			classified = LOW("Kubernetes context queries are read-only.");
 		} else if (args.some((argument) => /^(?:secrets?)(?:\/|$)/.test(argument)) || subcommand === "config") {
@@ -525,18 +908,20 @@ async function classifyCommand(tokens: ShellToken[], cwd: string): Promise<BashA
 		classified = ["get", "validate"].includes(args[0] ?? "") ? LOW("Kops inventory commands are read-only.") : HIGH("Kops mutations and unknown subcommands are High risk.");
 	} else if (command === "docker") {
 		const subcommand = args[0];
-		if (subcommand === "exec") {
+		if (await hasDockerHostEscape(args, cwd)) {
+			classified = HIGH("Docker host-escape options are High risk.");
+		} else if (hasUnsupportedDockerOption(args)) {
+			classified = HIGH("Unsupported Docker options are High risk.");
+		} else if (subcommand === "exec") {
 			let containerIndex = 1;
 			while (args[containerIndex]?.startsWith("-")) containerIndex += 1;
-			classified = combine(MEDIUM("Docker exec is bounded only when its nested command is proven safe."), await classifyCommand(executableTokens.slice(containerIndex + 2), cwd));
+			classified = combine(MEDIUM("Docker exec is bounded only when its nested command is proven safe."), await classifyCommand(executableTokens.slice(containerIndex + 2), cwd, commandPolicy));
 		} else if (subcommand === "compose") {
 			classified = ["config", "ps"].includes(args[1] ?? "") ? LOW("Docker Compose inspection is read-only.") : args[1] === "up" ? MEDIUM("Docker Compose startup is a bounded local effect.") : HIGH("Docker Compose mutations are High risk.");
 		} else if (["version", "info", "ps", "images", "inspect", "logs", "stats"].includes(subcommand ?? "")) {
 			classified = LOW("Docker daemon inspection is read-only.");
 		} else if (["build", "pull", "run", "stop"].includes(subcommand ?? "")) {
-			classified = hasDockerPrivilegeOrHostMount(args)
-				? HIGH("Privileged Docker execution and host mounts are High risk.")
-				: MEDIUM("Bounded Docker lifecycle operations are Medium risk.");
+			classified = MEDIUM("Bounded Docker lifecycle operations are Medium risk.");
 		} else {
 			classified = HIGH("Docker writes and unknown subcommands are High risk.");
 		}
@@ -567,25 +952,35 @@ async function classifyCommand(tokens: ShellToken[], cwd: string): Promise<BashA
 			? HIGH("Key Vault access is High risk.")
 			: isAzureInventory(args)
 				? LOW("Known Azure inventory commands are read-only.")
-				: HIGH("Azure mutations and unknown commands are High risk.");
+				: HIGH("Cloud mutations and unknown commands are High risk.");
 	} else if (command === "gh") {
-		classified = await assessGhCommand(args, cwd);
+		const gh = await assessGhCommand(args, cwd);
+		classified = {
+			...gh,
+			forceConfirmation: false,
+			offAllowed: false,
+			shieldPlans: [],
+		};
 	} else if (command === "npm") {
-		classified = ["view", "outdated", "audit"].includes(args[0] ?? "") ? LOW("Package metadata inspection is read-only.") : args[0] === "test" || args[0] === "ci" || args[0] === "install" || args[0] === "update" || args[0] === "run" && args[1] === "build" ? MEDIUM("Known test, build, and dependency operations are bounded.") : HIGH("Unknown project scripts are High risk.");
+		classified = ["view", "outdated", "audit"].includes(args[0] ?? "") ? LOW("Package metadata inspection is read-only.") : args[0] === "test" || args[0] === "ci" || args[0] === "install" || args[0] === "update" || args[0] === "run" && args[1] === "build" ? MEDIUM("Known test, build, and dependency operations are a Medium policy floor.") : HIGH("Unknown project scripts are High risk.");
 	} else if (command === "pnpm") {
-		classified = args[0] === "list" ? LOW("Package inventory is read-only.") : args[0] === "install" && args.includes("--frozen-lockfile") ? MEDIUM("Frozen dependency installation is bounded.") : HIGH("Unknown pnpm operations are High risk.");
+		classified = args[0] === "list" ? LOW("Package inventory is read-only.") : args[0] === "install" && args.includes("--frozen-lockfile") ? MEDIUM("Dependency installation is a Medium policy floor.") : HIGH("Unknown pnpm operations are High risk.");
 	} else if (command === "yarn") {
 		classified = args[0] === "why" ? LOW("Package dependency inspection is read-only.") : HIGH("Unknown yarn operations are High risk.");
 	} else if (command === "pip") {
-		classified = args[0] === "list" ? LOW("Package inventory is read-only.") : args[0] === "install" ? MEDIUM("Dependency installation is a bounded effect.") : HIGH("Unknown pip operations are High risk.");
+		classified = args[0] === "list" ? LOW("Package inventory is read-only.") : args[0] === "install" ? MEDIUM("Dependency installation is a Medium policy floor.") : HIGH("Unknown pip operations are High risk.");
 	} else if (command === "brew") {
-		classified = args[0] === "list" ? LOW("Package inventory is read-only.") : args[0] === "install" ? MEDIUM("Dependency installation is a bounded effect.") : HIGH("Unknown brew operations are High risk.");
-	} else if (["cargo"].includes(command)) {
-		classified = ["check", "test", "build", "install"].includes(args[0] ?? "") ? MEDIUM("Cargo build and installation operations are bounded.") : HIGH("Unknown Cargo operations are High risk.");
+		classified = args[0] === "list" ? LOW("Package inventory is read-only.") : args[0] === "install" ? MEDIUM("Dependency installation is a Medium policy floor.") : HIGH("Unknown brew operations are High risk.");
+	} else if (command === "cargo") {
+		classified = ["check", "test", "build", "install"].includes(args[0] ?? "") ? MEDIUM("Cargo build and installation operations are a Medium policy floor.") : HIGH("Unknown Cargo operations are High risk.");
 	} else if (command === "go") {
 		classified = args[0] === "test" || args[0] === "build" ? MEDIUM("Go tests and builds are bounded.") : HIGH("Unknown Go operations are High risk.");
 	} else if (command === "tar") {
-		classified = args.includes("-tf") || args.includes("--list") ? LOW("Archive listing is read-only.") : args.includes("--extract") || args.some((argument) => /^-[\w]*x/.test(argument)) ? MEDIUM("Archive extraction is a bounded local effect.") : HIGH("Unknown tar operations are High risk.");
+		classified = isTarExtraction(args)
+			? HIGH("Archive extraction is High risk.")
+			: args.includes("-tf") || args.includes("--list")
+				? LOW("Archive listing is read-only.")
+				: HIGH("Unknown tar operations are High risk.");
 	} else if (command === "sed") {
 		const [option, script, ...remaining] = args;
 		classified = option === "-n" && remaining.length === 0 && /^\d+(?:,\d+)?p$/.test(script ?? "")
@@ -595,21 +990,31 @@ async function classifyCommand(tokens: ShellToken[], cwd: string): Promise<BashA
 		classified = await assessRipgrep(executableTokens, cwd);
 	} else if (command === "sort") {
 		classified = assessSort(args);
-	} else if (["pwd", "ls", "find", "cat", "wc", "du", "ps", "whoami", "uname", "echo", "printf", "true"].includes(command)) {
+	} else if (["ls", "find", "cat", "wc", "du"].includes(command)) {
+		classified = await assessReaderCommand(command, args, cwd);
+	} else if (["pwd", "ps", "whoami", "uname", "echo", "printf", "true"].includes(command)) {
 		classified = LOW("Local inspection is read-only.");
 	} else if (args.length === 1 && ["--version", "-V", "-v", "version"].includes(args[0]!)) {
 		classified = LOW("Tool version reporting is read-only.");
 	} else {
 		classified = HIGH("Unknown commands and subcommands are High risk.");
 	}
-	return redirects ? combine(classified, redirects) : classified;
+	const withRedirects = redirects ? combine(classified, redirects) : classified;
+	const withShieldPlans = shieldPlansFor(signature);
+	const deterministic = withShieldPlans.length > 0
+		? { ...withRedirects, shieldPlans: mergeShieldPlans(withRedirects.shieldPlans, withShieldPlans) }
+		: withRedirects;
+	return applyCommandPolicy(signature, deterministic, commandPolicy);
 }
 
-export async function assessBashCommand(command: string, cwd: string) {
+export async function assessBashCommand(command: string, cwd: string, commandPolicy = EMPTY_COMMAND_POLICY) {
 	const parsed = tokenize(command);
 	if (parsed.error) return HIGH(parsed.error);
 	if (parsed.segments.length === 0) return HIGH("An empty shell command cannot be classified safely.");
-	let result = LOW("All shell segments are read-only.");
-	for (const segment of parsed.segments) result = combine(result, await classifyCommand(segment, cwd));
-	return result;
+	let result: BashAssessment | undefined;
+	for (const segment of parsed.segments) {
+		const classified = await classifyCommand(segment, cwd, commandPolicy);
+		result = result ? combine(result, classified) : classified;
+	}
+	return result ?? HIGH("An empty shell command cannot be classified safely.");
 }

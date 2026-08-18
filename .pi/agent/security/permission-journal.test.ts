@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { canonicalizePath } from "./canonical.ts";
 import { ReversibilityJournal } from "./journal.ts";
+import { FalsePositiveJournal, type FalsePositiveJournalEntry } from "./false-positive-journal.ts";
 
 async function fixture() {
 	const root = await mkdtemp(join(tmpdir(), "pi-permission-journal-"));
@@ -73,4 +74,38 @@ test("fails safe after a crash leaves a pending mutation with an unknown post-im
 	const recovered = (await restarted.entries()).find((candidate) => candidate.id === entry.id)!;
 	assert.equal(recovered.status, "recovery-unknown");
 	assert.equal(await restarted.latestEligible(), undefined);
+});
+
+test("persists only narrow deterministic High Allow once audit facts and fails closed on invalid storage", async () => {
+	const { agentDirectory } = await fixture();
+	const journal = new FalsePositiveJournal(agentDirectory);
+	const entry = {
+		schemaVersion: 1,
+		kind: "deterministic-high-allow-once",
+		timestamp: "2026-08-10T00:00:00.000Z",
+		sessionId: "session-4",
+		operationDigest: "sha256:operation",
+		computedFloor: "high",
+		computedReason: "Unknown custom operation is High risk.",
+		mode: "off",
+		policyRevision: "sha256:policy",
+		userDisposition: "allow-once",
+	} satisfies FalsePositiveJournalEntry;
+	const legacyFile = join(agentDirectory, "security", "false-positive-journal.json");
+	await mkdir(join(agentDirectory, "security"), { recursive: true });
+	await writeFile(legacyFile, '[{"kind":"historical"}]\n');
+	await journal.record(entry);
+	const file = join(agentDirectory, "security", "false-positive-journal-v1.json");
+	assert.deepEqual(JSON.parse(await readFile(file, "utf8")), [entry]);
+	assert.equal(await readFile(legacyFile, "utf8"), '[{"kind":"historical"}]\n');
+	await writeFile(file, '[{"schemaVersion":1}]\n');
+	await assert.rejects(journal.record(entry), /unsupported entry shape/i);
+
+
+	await writeFile(file, "x".repeat(1_048_577));
+	await assert.rejects(journal.record(entry), /size limit/i);
+
+	await rm(file);
+	await mkdir(file, { recursive: true });
+	await assert.rejects(journal.record(entry));
 });

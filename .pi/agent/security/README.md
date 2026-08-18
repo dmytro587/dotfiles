@@ -1,155 +1,172 @@
 # Pi permission gate
 
-This directory contains the enforcement core for Pi agent tool calls. It gives every call a deterministic risk floor, canonicalizes model-visible and runtime tool identities before authorization, requires a one-time permit where the active autonomy mode requires one, journals only reversible workspace-text mutations, and records a redacted audit event for every decision.
+This directory contains the permission boundary for Pi-mediated tool calls. It computes a deterministic risk floor from the actual tool name and arguments, applies an Off-to-High session Autonomy Level, asks the user directly when needed, journals supported workspace-text mutations, runs bounded Git Shield scans before Pi-mediated publishes, and records redacted audit facts.
 
-It is installed as the explicitly configured Pi extension at `~/.pi/agent/security/permission-gate.ts`. The version-controlled source lives in this repository under `./.pi/agent/`; run `./.pi/install_pi_permission_gate.sh` to copy it into Pi's agent directory without replacing unrelated Pi settings.
+The version-controlled source lives under `./.pi/agent/`. Install it with `./.pi/install_pi_permission_gate.sh`; the installer copies the runtime modules to `~/.pi/agent/security/` and adds the explicit extension path without replacing unrelated Pi settings.
 
 ## Scope and boundary
 
-The gate applies to Pi tool calls from the agent, including built-in tools and registered custom tools that pass through Pi's `tool_call` event. User-initiated Pi shell commands (`!` and `!!`) are deliberately outside this policy.
+The gate covers tool calls that Pi delivers through its `tool_call` event, including built-in tools and registered custom tools. It does not cover:
 
-This is a guardrail for a trusted Pi runtime, not a sandbox. An extension that invokes Node APIs directly can bypass Pi's tool lifecycle, and Pi does not offer a final, non-bypassable extension hook. Install only trusted extensions. DCG is also not an authorization prerequisite until its independent fail-closed work is complete.
+- user-initiated Pi shell commands with `!` or `!!`;
+- direct Node APIs invoked by a trusted extension;
+- a process, filesystem, network, or OS sandbox;
+- an actual-program resolver for arbitrary shell wrappers or aliases;
+- manual Git commands outside Pi, or a complete secret scanner for every Git operation;
+- Droid private implementation details or Droid Shield parity.
 
-## How the modules fit together
+Install only trusted extensions. This is a trusted-runtime guardrail, not a non-bypassable security boundary.
+
+## Components
 
 ```mermaid
 flowchart TD
-    Pi[Pi runtime] --> Extension[permission-gate.ts\nPi API adapter]
-    Extension --> Config[config.ts\nload and validate policy]
-    Config --> PolicyFile[../permission-policy.json]
-    Config --> Canonical[canonical.ts\npath identity and digests]
-    Extension --> Gate[gate.ts\nauthorization coordinator]
-    Gate --> Policy[policy.ts\ndeterministic risk assessment]
-    Policy --> Identity[tool-identity.ts\ncanonical tool names]
-    Policy --> Bash[bash-policy.ts\npure command classifier]
-    Bash --> GitHub[gh-policy.ts\nGitHub CLI manifest]
-    Policy --> Canonical
-    Bash --> Canonical
-    Gate --> Permits[permits.ts\none-time in-memory permits]
-    Gate --> Journal[journal.ts\nworkspace-text snapshots]
-    Gate --> Audit[audit.ts\nredacted JSONL audit log]
-    Gate --> Types[types.ts\nshared contracts]
-    Policy --> Types
-    Canonical --> Types
-    Journal --> Types
-    Permits --> Types
-    Audit --> Types
+    Pi[Pi runtime] --> Extension[permission-gate.ts]
+    Extension --> Config[config.ts]
+    Config --> PolicyFile[permission-policy.json]
+    Extension --> Gate[gate.ts]
+    Gate --> Policy[policy.ts]
+    Policy --> Bash[bash-policy.ts]
+    Bash --> GitHub[gh-policy.ts]
+    Bash --> ShieldPlan[Git publish Shield plans]
+    Gate --> Shield[shield.ts]
+    Gate --> Journal[journal.ts]
+    Gate --> HighAudit[false-positive-journal.ts]
+    Gate --> Audit[audit.ts]
+    Policy --> Canonical[canonical.ts]
 ```
 
-`permission-gate.ts` adapts Pi events, commands, and confirmation dialogs to the framework-independent `PermissionGate` class. `gate.ts` owns the authorization state for one Pi session; the other modules each provide one narrowly scoped capability.
+| File | Responsibility |
+| --- | --- |
+| `permission-gate.ts` | Pi event adapter, direct-approval UI, `/permission-mode`, Option+L, and `permission_undo`. |
+| `gate.ts` | Session state, deterministic authorization, direct approvals, Shield ordering, audit, mutation snapshots, and undo. |
+| `policy.ts` | Pi tool profiles, Off eligibility, and assessment composition. |
+| `bash-policy.ts` | Shell tokenizer, exact command-list matching, deterministic command policy, and Git Shield-plan emission. |
+| `shield.ts` | Bounded local Git-diff reader and redacting publish scanner. |
+| `gh-policy.ts` | Explicit GitHub CLI command-path policy. |
+| `canonical.ts` | Workspace path identity, protected-path checks, stable serialization, and digests. |
+| `journal.ts` | Private pre-image snapshots and checksum-safe undo for supported workspace-text mutations. |
+| `false-positive-journal.ts` | Non-authorizing audit record for a deterministic-High Allow once decision. |
+| `audit.ts` | Redacted JSONL operation audit. |
+| `config.ts` and `types.ts` | Version-2 policy validation and shared contracts. |
 
-| File | Responsibility | Used by |
-| --- | --- | --- |
-| `permission-gate.ts` | Registers the extension, `/permission-mode`, `Option+L`, `permission_request`, and `permission_undo`; tells the model to declare canonical Pi tool names. | Pi runtime |
-| `gate.ts` | Coordinates assessment, mode handling, canonical one-time permits, audit events, workspace-text snapshots, result finalization, and undo. | Extension and unit tests |
-| `policy.ts` | Profiles Pi tools and delegates Bash; returns Low, Medium, or High with hard denials and a journal adapter. | Gate |
-| `tool-identity.ts` | Strips one `functions.` prefix and normalizes `ffgrep`/`fffind` to canonical Pi tool names. | Policy and gate |
-| `bash-policy.ts` | Pure tokenizer and declarative CLI policy. It classifies strings without spawning a process. | Policy and unit tests |
-| `gh-policy.ts` | Enumerates every documented `gh` 2.89.0 command heading and applies path, browser, credential, alias, and bounded-local-I/O rules without invoking `gh`. | Bash policy and unit tests |
-| `canonical.ts` | Rejects globs, `..`, `~`, symlinks, and out-of-workspace paths; creates stable JSON and SHA-256 digests. | Policy, Bash policy, config, journal |
-| `permits.ts` | Keeps short-lived permits in memory, binds each one to a canonical operation digest, and consumes it once. | Gate |
-| `journal.ts` | Takes private pre-image snapshots only before supported workspace-text mutations, finalizes post-image checksums, recovers interrupted work, and performs checksum-safe undo. | Gate |
-| `audit.ts` | Appends private, redacted JSONL events under Pi's agent directory. | Gate |
-| `config.ts` | Loads and validates `permission-policy.json`, then hashes it into a policy revision. | Extension |
-| `types.ts` | Defines shared risk, policy, assessment, permit, journal, and audit types. | All TypeScript modules |
-
-## Runtime flow
+## Decision flow
 
 ```mermaid
 sequenceDiagram
     participant Pi as Pi runtime
-    participant Ext as permission-gate.ts
-    participant Gate as gate.ts
-    participant Policy as policy.ts
-    participant Journal as journal.ts
-    participant Audit as audit.ts
+    participant Ext as extension
+    participant Gate as gate
+    participant Policy as deterministic policy
+    participant Shield as Git Shield
+    participant User as user
+    participant Journal as mutation journal
 
-    Pi->>Ext: session_start
-    Ext->>Gate: startSession(session ID, cwd)
-    Gate->>Journal: recover incomplete records
-
-    Pi->>Ext: tool_call(actual name, exact input)
-    Ext->>Gate: handleToolCall(...)
-    Gate->>Policy: assess actual arguments
-    Policy-->>Gate: canonical name, floor, adapter, hard-deny state, digest
-
-    alt hard denial or disallowed mode
-        Gate->>Audit: record blocked decision
-        Gate-->>Ext: block with reason
-        Ext-->>Pi: tool does not run
-    else Low operation
-        Gate->>Audit: record allowed decision
-        Gate-->>Ext: allow
-    else Medium workspace-text mutation
-        Gate->>Journal: snapshot immediately before execution
-        Gate->>Audit: record allowed decision
-        Gate-->>Ext: allow
+    Pi->>Ext: tool_call(actual name, input)
+    Ext->>Gate: handleToolCall
+    Gate->>Policy: assess actual operation
+    Policy-->>Gate: floor, hard denial, Off eligibility, Shield plans
+    alt hard denial or stale high-risk subagent policy
+        Gate-->>Ext: block
+    else Git Shield plan exists
+        Gate->>Shield: bounded local diff scan
+        alt scan fails or detects a pattern
+            Gate-->>Ext: block
+        else operation is automatic at active level
+            Gate-->>Ext: allow
+        else direct decision required
+            Gate->>User: Allow once, Allow always, Reject
+            User-->>Gate: decision
+            Gate-->>Ext: allow or block
+        end
+    end
+    opt supported workspace-text mutation allowed
+        Gate->>Journal: snapshot before execution
         Pi->>Ext: tool_result
-        Ext->>Gate: finalize journal entry
-    else Medium without a journal adapter
-        Gate->>Audit: atomically consume Auto permit and record allow
-        Gate-->>Ext: allow without undo entry
-    else High operation
-        Gate->>Audit: record permit or high-mode authorization
-        Gate-->>Ext: allow only when the mode permits it
+        Ext->>Gate: finalize snapshot
     end
 ```
 
-A `permission_request` does not execute an operation. It independently re-runs `policy.ts` over the complete proposed target call, rejects a model risk declaration below the computed floor, and creates a permit bound to the canonical tool name, exact normalized arguments, session, workspace, and policy revision. Use the canonical Pi name without a `functions.` prefix in `toolName`; one model-visible prefix is normalized so `functions.edit` and the later native `edit` event share a permit digest. In `auto` mode, the requested target must be the only tool call in the next model turn so Pi can preflight it after the permit exists.
+Hard denials take precedence over every mode and every command list. A negative Shield scan occurs after deterministic hard-denial and subagent-revision checks, but before automatic execution or a direct prompt. No scan executes `git commit` or `git push`.
 
-## Risk and autonomy
+## Policy file and exact command lists
 
-The policy always computes a deterministic floor from the real tool call; a model cannot lower it by declaring a lower risk in `permission_request`.
+`permission-policy.json` is schema version 2. Its checked-in default is Off with empty command lists:
 
-When a direct operation has a deterministic High floor outside explicit `high` autonomy, the gate sends a redacted operation summary to the configured Pi model for an independent Low, Medium, or High classification. It then shows the deterministic and LLM classifications and offers `Apply and remember` or `Reject`. Applying records the LLM classification as the effective risk in the false-positive journal before execution. A missing, malformed, or unavailable LLM judgment denies the operation. Hard denials and subagent policy-revision checks occur before the LLM call and remain non-overridable.
+```json
+{
+  "version": 2,
+  "defaultAutonomy": "off",
+  "commandAllowlist": [],
+  "commandDenylist": [],
+  "commandBlocklist": []
+}
+```
 
-The model supplies `declaredRisk`, `declaredRiskReason`, intent, expected effect, and rollback context for a permit request; it is not an internal risk classifier. Droid's visible `Execute` contract likewise makes the model supply `riskLevel` and a reason, but does not reveal whether any private backend verifies that declaration. Pi records the declared risk and a redacted declared rationale when a permit is issued, consumed, or finalized.
+Each list entry must parse as exactly one literal bare shell segment. Arguments must match exactly. A list entry cannot contain wrappers, environment assignments, shell operators, globs, substitutions, a path-qualified executable, or prefix matching.
 
-For Auto-mode High permit requests, the selector offers `Apply and remember` or `Reject`. Applying journals the exact permitted operation before the permit is issued; it does not assert that the operation is safe. If the journal cannot be written, the operation remains denied.
+For each Bash segment, the policy applies these stages:
 
-- **Low** is strictly read-only safe workspace work, session-local coordination, public search retrieval, or an exact allowlisted inspection/inventory CLI operation. It runs without a permit and is audited.
-- **Medium** is bounded impact: verified workspace-text `edit`/`write`, tests and builds, trusted dependency installation, selected local Git/container/cloud operations, and public fetches. Every Auto Medium call requires a permit. Only `journalAdapter: "workspace-text"` is undoable; `journalAdapter: "none"` has no undo entry.
-- **High** covers privileged, destructive, remote-write, sensitive, unknown, or ambiguous work: unknown tools and commands, `docker rm`, HTTP mutation or credential-bearing HTTP options, cloud/Kubernetes/GitHub/package writes, privileged containers, and unproven subagent spawns.
-- **Hard denial** covers protected credential files and paths, private keys, `.env` files, ambiguous or out-of-workspace paths, symlink paths, protected/device redirection targets, and known destructive disk or worktree-loss commands. Sensitive credential-bearing arguments are High and still require the active autonomy mode to allow them.
+1. An exact blocklist match is a hard denial.
+2. The deterministic classifier computes the normal floor.
+3. Existing hard denials remain intact.
+4. An exact denylist match requires a direct decision without lowering the floor.
+5. An exact allowlist match may lower only a non-hard-denied segment to Low.
 
-`gh-policy.ts` explicitly records all 214 command headings documented by `gh help reference` in v2.89.0. That version is a review baseline, not a runtime version gate: a known path keeps its classification when another `gh` version is installed. Path-qualified executables, unknown command paths, and user-defined aliases remain High because their semantics are not proven; an alias-looking `--help` invocation is Low only after a documented built-in path is resolved. Browser flags raise otherwise read-only paths to High; token disclosure and credential-bearing authentication are hard-denied. Bounded clone, download, cache-clearing, port-forward, attestation, and asset-verification operations are Medium only after their literal, non-repeated local inputs and protected workspace paths pass validation.
+Compound commands compose at the maximum risk. Every segment must be independently Off-eligible before a compound command can run automatically in Off.
 
-| Mode | Behaviour |
+The Bash classifier treats ambiguous syntax, dynamic expansion, environment assignments, path-qualified executables, and unknown commands as High. It canonicalizes supported filesystem-reader roots and downloader output destinations before accepting a low-risk result. Docker host-escape forms, every archive extraction form, `kubectl exec`, destructive Git and worktree operations, protected data access, credential-bearing calls, and ambiguous redirects remain High or hard-denied.
+
+## Risk and direct approval
+
+The gate derives Low, Medium, or High from the actual operation. A tool cannot self-classify to reduce that floor.
+
+| Mode | Automatic execution |
 | --- | --- |
-| `auto` | Low runs. Every Medium requires a matching `permission_request` from the prior model turn; workspace-text Medium journals, non-journal Medium consumes its permit without an undo entry. A direct deterministic-High operation is LLM-classified and requires `Apply and remember`; headless review is denied. |
-| `low` | Only Low operations run. A deterministic-High direct operation can run only after the LLM judges it Low and the user applies and journals that judgment. |
-| `medium` | Low and Medium operations run; only workspace-text Medium receives a journal entry. A deterministic-High direct operation can run only after the LLM judges it Low or Medium and the user applies and journals that judgment. |
-| `high` | Low, Medium, and High work run unattended after deterministic hard-denial checks. High decisions remain audited. |
+| `off` | Only Low canonical `read`, `grep`, `find`, `ls`, `todo`, and `wait` operations that pass all existing checks, plus fully exact-allowlisted Low Bash segments. |
+| `low` | Low operations that are not forced to direct approval. |
+| `medium` | Low and Medium operations that are not forced to direct approval. |
+| `high` | Low, Medium, and High operations that are not forced to direct approval. Hard denials still block. |
 
-Set the mode for a session with `/permission-mode auto|low|medium|high`, or press `Option+L` to cycle `auto → low → medium → high → auto`. Start Pi with `--permission-autonomy high` for a different default. The policy file provides the default mode and bounded file, request, permit, and journal limits; editing it changes the policy revision and invalidates permits issued under the previous revision.
+When an operation is not automatic, an interactive UI presents exactly **Allow once**, **Allow always**, and **Reject**:
 
-In VS Code's macOS terminal, the extension also consumes the raw `¬` input emitted by `Option+L` when Option-as-meta is disabled.
+- **Allow once** authorizes only that event. It does not change the session level.
+- **Allow always** raises the session level to the stricter of the current level and the operation floor. The extension persists a `mode` entry in Pi session history and updates status before the gate commits the new in-memory level.
+- **Reject**, dismissal, a missing UI, or persistence failure blocks the operation.
+
+A deterministic-High **Allow once** writes a schema-versioned, redacted audit entry before execution. A failed journal write blocks the operation. The record is historical audit evidence only; it never participates in future authorization. Low and Medium decisions, and all Allow always decisions, do not create that record.
+
+Supported workspace-text `edit` and `write` operations retain their existing private pre-image snapshot. `permission_undo` asks for interactive review and restores only the most recent successfully journaled target whose post-operation checksum still matches.
+
+## Git Shield
+
+The classifier emits a Shield plan only for bare, literal Pi-mediated `git commit` and `git push` segments. A compound invocation can create both plans. Wrappers, assignments, dynamic shell syntax, path-qualified Git executables, malformed input, and unsupported publish forms do not claim Shield coverage.
+
+For supported forms, `shield.ts` invokes `/usr/bin/git` directly with a fixed environment and a strict `maxGitDiffBytes` cap. It reads a bounded staged or outgoing diff without invoking the requested publish. Normal commits use the staged diff; `git commit -a` and `git commit --all` include tracked working-tree changes. Supported pushes use a configured upstream, one literal remote and branch, or a verified first push. Other forms fail closed.
+
+Only added diff lines are inspected in process memory. The scanner blocks PEM private-key headers, selected AWS, GitHub, GitLab, OpenAI, Slack, and Stripe credential patterns, plus high-entropy base64-like values assigned to secret-bearing keys. It ignores explicit inert placeholders. Results expose only generic rule identifiers, never a diff, path, excerpt, or matched value.
+
+Shield is deliberately narrow. It is not a general secret-detection system, does not scan manual Git activity, and does not establish parity with any Droid implementation.
 
 ## Persistent records
 
-The source files in this repository contain no journal snapshots or audit events. At runtime the gate writes private state beneath `${PI_CODING_AGENT_DIR:-~/.pi/agent}`:
+Runtime state stays beneath `${PI_CODING_AGENT_DIR:-~/.pi/agent}` with private permissions:
 
 ```text
-permission-audit/events.jsonl                  # 0700 directory, 0600 redacted event log
-permission-journal/<sanitized-session-id>/     # 0700 directory
-  <id>.json                                    # journal metadata
-  <id>.preimage                                # original text bytes, when a file existed
-security/false-positive-journal.json           # 0700 directory, 0600 atomically replaced JSON array
+permission-audit/events.jsonl                     # redacted JSONL audit events
+permission-journal/<sanitized-session-id>/        # mutation metadata and pre-images
+security/false-positive-journal-v1.json           # direct High Allow once audit records
+security/false-positive-journal.json              # untouched historical records from earlier releases
 ```
 
-Audit records contain timestamps, tool names, risk and decision metadata, policy and operation digests, and a short reason. The false-positive journal adds the redacted model rationale, deterministic rationale, and, for direct High overrides, the user-approved LLM effective risk, but never the full tool input, command, file content, or path. Neither record stores credentials. The extension also appends the audit facts as Pi custom session entries. The workspace-text journal is intentionally private because pre-images contain the original file contents; it never accepts protected or out-of-workspace resources.
-
-`permission_undo` asks for an interactive review, then restores only the most recent applied journal entry whose target still matches the journaled post-operation checksum. If another process changed the target, undo refuses rather than overwriting that change.
+Audit events contain digests, risk, decision, mode, policy revision, reversibility, and redacted reasons. They do not contain complete tool input, commands, file content, paths, diffs, or credentials. The direct-approval journal preserves the same boundary and is never read to authorize another operation.
 
 ## Development and installation
 
 ```bash
-# Run the gate test suite from this repository. The *.test.ts files live beside their source modules.
 cd .pi
 npm run test:permission-gate
-
-# Copy the source bundle to Pi's agent directory and append its explicit extension path.
-bash ./.pi/install_pi_permission_gate.sh
+bash ./install_pi_permission_gate.sh
 ```
 
-The installer copies the runtime `agent/security/*.ts` modules, excluding `*.test.ts`, plus `agent/permission-policy.json` to Pi's agent directory with private permissions. It then updates only the `extensions` array in `settings.json`, preserving existing settings, packages, themes, and configured extensions.
+The installer copies runtime TypeScript modules with private permissions, skips test modules, removes the two retired runtime modules from an existing installation, installs the version-2 policy, and updates only the configured `extensions` array in `settings.json`.

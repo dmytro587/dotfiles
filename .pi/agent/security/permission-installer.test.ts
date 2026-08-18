@@ -28,6 +28,9 @@ test("installer copies private gate files and appends the configured extension p
 	const agentDirectory = join(home, "agent");
 	const extension = join(agentDirectory, "security", "permission-gate.ts");
 	await mkdir(agentDirectory, { recursive: true });
+	await mkdir(join(agentDirectory, "security"), { recursive: true });
+	await writeFile(join(agentDirectory, "security", "permits.ts"), "obsolete\n");
+	await writeFile(join(agentDirectory, "security", "risk-judge.ts"), "obsolete\n");
 	await writeFile(join(agentDirectory, "settings.json"), JSON.stringify({
 		theme: "dark",
 		packages: ["npm:existing-package"],
@@ -42,8 +45,14 @@ test("installer copies private gate files and appends the configured extension p
 	assert.deepEqual(settings.extensions, ["/existing/extension.ts", extension]);
 	assert.equal(settings.theme, "dark");
 	assert.deepEqual(settings.packages, ["npm:existing-package"]);
-	assert.equal(JSON.parse(await readFile(join(agentDirectory, "permission-policy.json"), "utf8")).defaultAutonomy, "auto");
+	const installedPolicy = await readFile(join(agentDirectory, "permission-policy.json"), "utf8");
+	assert.equal(JSON.parse(installedPolicy).defaultAutonomy, "off");
+	assert.equal(installedPolicy.includes("maxPermitRequestBytes"), false);
+	assert.equal(installedPolicy.includes("permitTtlMs"), false);
 	assert.equal((await stat(join(agentDirectory, "security"))).mode & 0o777, 0o700);
 	assert.equal((await stat(extension)).mode & 0o777, 0o600);
+	assert.equal((await stat(join(agentDirectory, "security", "shield.ts"))).mode & 0o777, 0o600);
+	await assert.rejects(stat(join(agentDirectory, "security", "permits.ts")), { code: "ENOENT" });
+	await assert.rejects(stat(join(agentDirectory, "security", "risk-judge.ts")), { code: "ENOENT" });
 	await assert.rejects(stat(join(agentDirectory, "security", "permission-installer.test.ts")), { code: "ENOENT" });
 });

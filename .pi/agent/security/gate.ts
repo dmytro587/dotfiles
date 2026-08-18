@@ -1,30 +1,26 @@
 import { AuditRecorder, redactText } from "./audit.ts";
+import { type CompiledCommandPolicy } from "./bash-policy.ts";
 import { FalsePositiveJournal } from "./false-positive-journal.ts";
 import { stableJson } from "./canonical.ts";
-import { canonicalToolName } from "./tool-identity.ts";
 import { ReversibilityJournal, type JournalEntry } from "./journal.ts";
-import { PermitStore } from "./permits.ts";
 import { assess } from "./policy.ts";
+import { GitShieldScanner, type ShieldScanner } from "./shield.ts";
 import {
+	autonomyRank,
 	isAutonomyMode,
-	isRiskClass,
-	maxRisk,
-	riskRank,
+	stricterAutonomyMode,
 	type Assessment,
 	type AuditEvent,
-	type HighRiskApproval,
 	type AutonomyMode,
+	type OperationApproval,
 	type PermissionPolicyConfig,
-	type PermissionRequest,
-	type RiskClass,
-	type RiskJudgment,
 } from "./types.ts";
 
 export interface PermissionUi {
 	hasUI: boolean;
 	confirm(title: string, message: string): Promise<boolean>;
-	approveHighRisk?(title: string, message: string): Promise<HighRiskApproval | undefined>;
-	judgeHighRisk?(title: string, message: string): Promise<RiskJudgment | undefined>;
+	approveOperation?(title: string, message: string): Promise<OperationApproval | undefined>;
+	persistMode?(mode: AutonomyMode): Promise<boolean>;
 }
 
 export interface GateSession {
@@ -35,7 +31,9 @@ export interface GateSession {
 export interface GateOptions {
 	agentDirectory: string;
 	policy: PermissionPolicyConfig;
+	commandPolicy: CompiledCommandPolicy;
 	policyRevision: string;
+	shieldScanner?: ShieldScanner;
 	onAudit?(event: AuditEvent): void;
 }
 
@@ -48,56 +46,28 @@ export interface ToolCall {
 interface PendingMutation {
 	assessment: Assessment;
 	journalEntry: JournalEntry;
-	declaredRisk?: RiskClass;
-	declaredRiskReason?: string;
-	effectiveRisk?: RiskClass;
-	approval?: AuditEvent["approval"];
+	approval: AuditEvent["approval"];
 }
 
-function text(value: unknown, maxLength = 2_000): string | undefined {
-	return typeof value === "string" && value.trim() !== "" && value.length <= maxLength ? value : undefined;
-}
-
-function operationPreview(request: PermissionRequest, assessment: Assessment): string {
-	if (assessment.canonicalToolName === "bash" && typeof request.input.command === "string") {
-		return `Command: ${request.input.command.slice(0, 400)}`;
+function operationPreview(call: ToolCall, assessment: Assessment) {
+	if (assessment.canonicalToolName === "bash" && typeof call.input.command === "string") {
+		return `Command: ${redactText(call.input.command.slice(0, 400))}`;
 	}
 	if (assessment.resource) {
 		if (assessment.canonicalToolName === "edit" || assessment.canonicalToolName === "write") {
-			return `Target: ${assessment.resource.relativePath}\nMutation payload: ${Buffer.byteLength(stableJson(request.input), "utf8")} bytes`;
+			return `Target: ${assessment.resource.relativePath}\nMutation payload: ${Buffer.byteLength(stableJson(call.input), "utf8")} bytes`;
 		}
 		return `Target: ${assessment.resource.relativePath}`;
 	}
 	return "Target: custom or external tool operation";
 }
 
-function validRequest(value: unknown): value is PermissionRequest {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-	const request = value as Partial<PermissionRequest>;
-	return (
-		typeof request.toolName === "string" &&
-		request.input !== null &&
-		typeof request.input === "object" &&
-		!Array.isArray(request.input) &&
-		isRiskClass(request.declaredRisk) &&
-		text(request.declaredRiskReason) !== undefined &&
-		text(request.intent) !== undefined &&
-		text(request.expectedEffect) !== undefined &&
-		text(request.rollbackPlan) !== undefined
-	);
-}
-
-/**
- * Framework-independent enforcement core. The Pi extension only adapts its
- * events and dialogs to this class, which makes the authorization contract
- * testable without a model or a running TUI.
- */
 export class PermissionGate {
 	private readonly options: GateOptions;
 	private readonly audit: AuditRecorder;
-	private readonly permits = new PermitStore();
 	private readonly pendingMutations = new Map<string, PendingMutation>();
 	private readonly falsePositiveJournal: FalsePositiveJournal;
+	private readonly shieldScanner: ShieldScanner;
 	private journal?: ReversibilityJournal;
 	private session?: GateSession;
 	private mediumBudget = { fileCount: 0, snapshotBytes: 0 };
@@ -109,6 +79,7 @@ export class PermissionGate {
 		this.options = options;
 		this.audit = new AuditRecorder(options.agentDirectory);
 		this.falsePositiveJournal = new FalsePositiveJournal(options.agentDirectory);
+		this.shieldScanner = options.shieldScanner ?? new GitShieldScanner();
 		this.mode = options.policy.defaultAutonomy;
 	}
 
@@ -132,6 +103,7 @@ export class PermissionGate {
 
 	async startSession(session: GateSession): Promise<{ recoveredUnknown: number }> {
 		this.session = session;
+		this.mode = this.options.policy.defaultAutonomy;
 		this.pendingMutations.clear();
 		this.journal = new ReversibilityJournal(this.options.agentDirectory, session.sessionId);
 		const recovery = await this.journal.recover();
@@ -164,6 +136,7 @@ export class PermissionGate {
 			sessionId: this.session.sessionId,
 			policyRevision: this.options.policyRevision,
 			policy: this.options.policy,
+			commandPolicy: this.options.commandPolicy,
 			mediumBudget: this.mediumBudget,
 		});
 	}
@@ -186,90 +159,19 @@ export class PermissionGate {
 		assessment: Assessment,
 		decision: string,
 		approval: AuditEvent["approval"],
-		declaredRisk?: RiskClass,
-		declaredRiskReason?: string,
-		effectiveRisk = assessment.floor,
+		reason = assessment.reason,
 	): Promise<void> {
 		await this.record({
 			operationDigest: assessment.operationDigest,
 			resourceDigest: assessment.resourceDigest,
 			tool: assessment.toolName,
-			declaredRisk,
-			declaredRiskReason: declaredRiskReason ? redactText(declaredRiskReason) : undefined,
 			computedFloor: assessment.floor,
-			effectiveRisk,
+			effectiveRisk: assessment.floor,
 			decision,
 			reversible: assessment.reversible,
 			approval,
-			reason: assessment.reason,
+			reason,
 		});
-	}
-	private async reviewHighRiskCall(
-		assessment: Assessment,
-		call: ToolCall,
-		ui: PermissionUi | undefined,
-	): Promise<{ effectiveRisk: RiskClass; approval: AuditEvent["approval"] } | { reason: string }> {
-		if (!ui?.hasUI) return { reason: "High-risk operation requires an interactive approval UI." };
-		if (!ui.judgeHighRisk) return { reason: "High-risk operation could not be reviewed by the configured LLM judge." };
-
-		const preview = assessment.canonicalToolName === "bash" && typeof call.input.command === "string"
-			? `Command: ${call.input.command.slice(0, 400)}`
-			: assessment.resource
-				? `Target: ${assessment.resource.relativePath}`
-				: "Target: custom or external tool operation";
-		const judgment = await ui.judgeHighRisk(
-			"Classify high-risk Pi operation",
-			`Tool: ${assessment.canonicalToolName}\n${redactText(preview)}\nDeterministic reason: ${redactText(assessment.reason)}`,
-		);
-		if (!judgment) return { reason: "High-risk operation could not be classified by the configured LLM judge." };
-
-		const selected = ui.approveHighRisk
-			? await ui.approveHighRisk(
-				"Apply LLM risk classification?",
-				`Tool: ${assessment.canonicalToolName}\n${redactText(preview)}\nDeterministic risk: high\nLLM risk: ${judgment.risk}\nLLM rationale: ${redactText(judgment.reason)}`,
-			) ?? "deny"
-			: await ui.confirm(
-				"Apply LLM risk classification?",
-				`Tool: ${assessment.canonicalToolName}\n${redactText(preview)}\nDeterministic risk: high\nLLM risk: ${judgment.risk}\nLLM rationale: ${redactText(judgment.reason)}`,
-			) ? "allow-and-journal" : "deny";
-		if (selected === "deny") return { reason: "LLM risk classification was not approved." };
-
-		try {
-			await this.falsePositiveJournal.record({
-				kind: "false-positive",
-				timestamp: new Date().toISOString(),
-				sessionId: this.session!.sessionId,
-				runtimeToolName: assessment.toolName,
-				canonicalToolName: assessment.canonicalToolName,
-				operationDigest: assessment.operationDigest,
-				resourceDigest: assessment.resourceDigest,
-				declaredRisk: "high",
-				declaredRiskReason: "Deterministic policy classified the direct tool call as high risk.",
-				computedFloor: assessment.floor,
-				computedReason: redactText(assessment.reason),
-				effectiveRisk: judgment.risk,
-				llmRisk: judgment.risk,
-				llmReason: redactText(judgment.reason),
-				mode: this.mode,
-				policyRevision: this.options.policyRevision,
-				intent: "Execute the direct tool call.",
-				expectedEffect: redactText(preview),
-				rollbackPlan: assessment.reversible ? "A reversal journal is available." : "No reversal journal is available.",
-				userDisposition: "false-positive",
-			});
-		} catch {
-			return { reason: "LLM risk classification was not applied because the false-positive journal could not be written." };
-		}
-		return { effectiveRisk: judgment.risk, approval: "confirmed-and-journaled" };
-	}
-
-
-	private permitFor(assessment: Assessment, minimumRisk: RiskClass) {
-		const permit = this.permits.peek(assessment.operationDigest);
-		if (!permit || permit.sessionId !== this.session?.sessionId || riskRank(permit.effectiveRisk) < riskRank(minimumRisk)) {
-			return undefined;
-		}
-		return permit;
 	}
 
 	private checkSubagentInheritance(assessment: Assessment): string | undefined {
@@ -279,105 +181,79 @@ export class PermissionGate {
 		return undefined;
 	}
 
-	async requestPermission(value: unknown, ui: PermissionUi): Promise<{ ok: boolean; message: string }> {
-		const unavailable = this.unavailable();
-		if (unavailable) return { ok: false, message: unavailable };
-		if (!validRequest(value)) return { ok: false, message: "Permission request must include complete target arguments and non-empty explanations." };
-		const request = value;
+	private async scanShieldPlans(assessment: Assessment): Promise<string | undefined> {
+		if (!this.session) return "Permission gate has not initialized its session state.";
+		const seen = new Set<string>();
+		for (const plan of assessment.shieldPlans) {
+			const key = JSON.stringify([plan.kind, ...plan.args]);
+			if (seen.has(key)) continue;
+			seen.add(key);
+			let scan;
+			try {
+				scan = await this.shieldScanner.scan(plan, this.session.cwd, this.options.policy.limits.maxGitDiffBytes);
+			} catch {
+				return plan.kind === "push"
+					? "unable to establish a bounded push range"
+					: "unable to establish a bounded Git diff";
+			}
+			if (!scan.ok) return scan.reason;
+		}
+	}
 
-		let requestBytes: number;
+	private allowsAutomatic(assessment: Assessment) {
+		if (assessment.forceConfirmation) return false;
+		if (this.mode === "off") return assessment.offAllowed;
+		return autonomyRank(assessment.floor) <= autonomyRank(this.mode);
+	}
+
+	private async recordHighAllowOnce(assessment: Assessment): Promise<string | undefined> {
+		if (assessment.floor !== "high") return;
 		try {
-			requestBytes = Buffer.byteLength(stableJson(value.input), "utf8");
+			await this.falsePositiveJournal.record({
+				schemaVersion: 1,
+				kind: "deterministic-high-allow-once",
+				timestamp: new Date().toISOString(),
+				sessionId: this.session!.sessionId,
+				operationDigest: assessment.operationDigest,
+				resourceDigest: assessment.resourceDigest,
+				computedFloor: "high",
+				computedReason: redactText(assessment.reason),
+				mode: this.mode,
+				policyRevision: this.options.policyRevision,
+				userDisposition: "allow-once",
+			});
 		} catch {
-			return { ok: false, message: "Permission request arguments must be JSON-compatible." };
+			return "High-risk Allow once was blocked because its audit journal could not be written.";
 		}
-		if (requestBytes > this.options.policy.limits.maxPermitRequestBytes) {
-			return { ok: false, message: "Permission request exceeds the configured payload limit; the operation remains High and cannot receive an Auto permit." };
-		}
-		const requestedToolName = canonicalToolName(request.toolName);
-		if (requestedToolName === "permission_request" || requestedToolName === "permission_undo") {
-			return { ok: false, message: "Permission tools cannot authorize themselves." };
-		}
+	}
 
-		const assessment = await this.assessCall(request.toolName, request.input);
-		if (assessment.hardDeny) {
-			await this.recordAssessment(assessment, "denied", "denied", request.declaredRisk, request.declaredRiskReason);
-			return { ok: false, message: assessment.reason };
-		}
-		if (riskRank(request.declaredRisk) < riskRank(assessment.floor)) {
-			await this.recordAssessment(assessment, "denied-underclassified", "denied", request.declaredRisk, request.declaredRiskReason);
-			return { ok: false, message: "Declared risk is below the deterministic policy floor." };
-		}
-
-		const effectiveRisk = maxRisk(request.declaredRisk, assessment.floor);
-		let approval: "not-required" | "confirmed" | "confirmed-and-journaled" | "mode-high" = "not-required";
-		if (this.mode === "auto" && effectiveRisk === "high") {
-			if (!ui.hasUI) {
-				await this.recordAssessment(assessment, "denied-no-ui", "denied", request.declaredRisk, request.declaredRiskReason, effectiveRisk);
-				return { ok: false, message: "High-risk Auto work requires an interactive approval UI." };
+	private async requestDirectApproval(
+		assessment: Assessment,
+		call: ToolCall,
+		ui: PermissionUi | undefined,
+	): Promise<{ approval: "allow-once" | "allow-always" } | { reason: string }> {
+		if (!ui?.hasUI || !ui.approveOperation) return { reason: "Operation requires an interactive approval UI." };
+		const selected = await ui.approveOperation(
+			"Allow Pi operation?",
+			`Tool: ${assessment.canonicalToolName}\n${operationPreview(call, assessment)}\nRisk: ${assessment.floor}\nReason: ${redactText(assessment.reason)}`,
+		);
+		if (selected !== "allow-once" && selected !== "allow-always") return { reason: "Operation was rejected." };
+		if (selected === "allow-always") {
+			if (!ui.persistMode) return { reason: "Allow always could not persist the session autonomy level." };
+			const nextMode = stricterAutonomyMode(this.mode, assessment.floor);
+			let persisted = false;
+			try {
+				persisted = await ui.persistMode(nextMode);
+			} catch {
+				persisted = false;
 			}
-			const message = `Tool: ${assessment.canonicalToolName}\n${operationPreview(request, assessment)}\nRisk: ${effectiveRisk}\nDeclared risk rationale: ${request.declaredRiskReason}\nReason: ${assessment.reason}\nIntent: ${request.intent}\nExpected effect: ${request.expectedEffect}\nRollback: ${request.rollbackPlan}`;
-			const selected = ui.approveHighRisk
-				? await ui.approveHighRisk("Allow high-risk Pi operation?", message) ?? "deny"
-				: await ui.confirm("Allow high-risk Pi operation?", message) ? "allow" : "deny";
-			if (selected === "deny") {
-				await this.recordAssessment(assessment, "denied-by-user", "denied", request.declaredRisk, request.declaredRiskReason, effectiveRisk);
-				return { ok: false, message: "High-risk operation was not approved." };
-			}
-			if (selected === "allow-and-journal") {
-				try {
-					await this.falsePositiveJournal.record({
-						kind: "false-positive",
-						timestamp: new Date().toISOString(),
-						sessionId: this.session!.sessionId,
-						runtimeToolName: assessment.toolName,
-						canonicalToolName: assessment.canonicalToolName,
-						operationDigest: assessment.operationDigest,
-						resourceDigest: assessment.resourceDigest,
-						declaredRisk: request.declaredRisk,
-						declaredRiskReason: redactText(request.declaredRiskReason),
-						computedFloor: assessment.floor,
-						computedReason: redactText(assessment.reason),
-						effectiveRisk,
-						mode: this.mode,
-						policyRevision: this.options.policyRevision,
-						intent: redactText(request.intent),
-						expectedEffect: redactText(request.expectedEffect),
-						rollbackPlan: redactText(request.rollbackPlan),
-						userDisposition: "false-positive",
-					});
-				} catch {
-					await this.recordAssessment(assessment, "denied-journal-failure", "denied", request.declaredRisk, request.declaredRiskReason, effectiveRisk);
-					return { ok: false, message: "High-risk operation was not approved because the false-positive journal could not be written." };
-				}
-				approval = "confirmed-and-journaled";
-			} else {
-				approval = "confirmed";
-			}
-		} else if (this.mode === "high" && effectiveRisk === "high") {
-			approval = "mode-high";
+			if (!persisted) return { reason: "Allow always could not persist the session autonomy level." };
+			this.mode = nextMode;
+			return { approval: "allow-always" };
 		}
-
-		const issued = this.permits.issue({
-			operationDigest: assessment.operationDigest,
-			resourceDigest: assessment.resourceDigest,
-			sessionId: this.session!.sessionId,
-			toolName: assessment.canonicalToolName,
-			effectiveRisk,
-			declaredRisk: request.declaredRisk,
-			declaredRiskReason: request.declaredRiskReason,
-			approval,
-			expiresAt: Date.now() + this.options.policy.limits.permitTtlMs,
-		});
-		if (!issued.ok) {
-			await this.recordAssessment(assessment, "denied-duplicate-permit", "denied", request.declaredRisk, request.declaredRiskReason, effectiveRisk);
-			return { ok: false, message: issued.reason };
-		}
-		await this.recordAssessment(assessment, "permit-issued", approval, request.declaredRisk, request.declaredRiskReason, effectiveRisk);
-		return {
-			ok: true,
-			message: `One-time permit issued for ${assessment.canonicalToolName}. Issue the exact target tool call in the next model turn.`,
-		};
+		const journalFailure = await this.recordHighAllowOnce(assessment);
+		if (journalFailure) return { reason: journalFailure };
+		return { approval: "allow-once" };
 	}
 
 	async handleToolCall(call: ToolCall, ui?: PermissionUi): Promise<{ block: true; reason: string } | undefined> {
@@ -393,62 +269,24 @@ export class PermissionGate {
 			await this.recordAssessment(assessment, "blocked", "denied");
 			return { block: true, reason: inheritanceFailure };
 		}
-
-		let effectiveRisk = assessment.floor;
-		let reviewApproval: AuditEvent["approval"] | undefined;
-		if (assessment.floor === "high" && this.mode !== "high") {
-			const review = await this.reviewHighRiskCall(assessment, call, ui);
-			if ("reason" in review) {
-				await this.recordAssessment(assessment, "blocked-llm-review", "denied");
-				return { block: true, reason: review.reason };
-			}
-			effectiveRisk = review.effectiveRisk;
-			reviewApproval = review.approval;
+		const shieldFailure = await this.scanShieldPlans(assessment);
+		if (shieldFailure) {
+			await this.recordAssessment(assessment, "blocked-shield", "denied", `Git Shield blocked this operation: ${shieldFailure}.`);
+			return { block: true, reason: shieldFailure };
 		}
 
-		if (effectiveRisk === "low") {
-			await this.recordAssessment(assessment, "allowed", reviewApproval ?? "not-required", undefined, undefined, effectiveRisk);
-			return undefined;
-		}
-		if (this.mode === "low") {
-			await this.recordAssessment(assessment, "blocked", "denied", undefined, undefined, effectiveRisk);
-			return { block: true, reason: `${effectiveRisk} operations are denied in low autonomy mode.` };
-		}
-		if (effectiveRisk === "high") {
-			if (this.mode === "medium") {
-				await this.recordAssessment(assessment, "blocked", "denied");
-				return { block: true, reason: "High-risk operations are denied in medium autonomy mode." };
+		let approval: AuditEvent["approval"] = "not-required";
+		if (!this.allowsAutomatic(assessment)) {
+			const direct = await this.requestDirectApproval(assessment, call, ui);
+			if ("reason" in direct) {
+				await this.recordAssessment(assessment, "denied-direct-approval", "denied");
+				return { block: true, reason: direct.reason };
 			}
-			if (this.mode === "auto" && !reviewApproval) {
-				const permit = this.permitFor(assessment, "high");
-				if (!permit) {
-					await this.recordAssessment(assessment, "blocked-missing-permit", "denied");
-					return { block: true, reason: "High-risk Auto operation requires permission_request in a prior model turn." };
-				}
-				this.permits.consume(assessment.operationDigest);
-				await this.recordAssessment(assessment, "allowed", permit.approval, permit.declaredRisk, permit.declaredRiskReason, permit.effectiveRisk);
-				return undefined;
-			}
-			await this.recordAssessment(assessment, "allowed", reviewApproval ?? "mode-high", undefined, undefined, effectiveRisk);
-			return undefined;
+			approval = direct.approval;
 		}
 
-		// Auto requires a permit for ordinary Medium work. An approved High-risk
-		// LLM review is a user-confirmed, journaled exception.
-		let permit;
-		if (this.mode === "auto" && !reviewApproval) {
-			permit = this.permitFor(assessment, "medium");
-			if (!permit) {
-				await this.recordAssessment(assessment, "blocked-missing-permit", "denied");
-				return { block: true, reason: "Medium Auto operation requires permission_request in a prior model turn." };
-			}
-		}
 		if (assessment.journalAdapter === "none") {
-			if (permit && !this.permits.consume(assessment.operationDigest)) {
-				await this.recordAssessment(assessment, "blocked-expired-permit", "denied");
-				return { block: true, reason: "Permission permit expired before execution." };
-			}
-			await this.recordAssessment(assessment, "allowed", reviewApproval ?? permit?.approval ?? "not-required", permit?.declaredRisk, permit?.declaredRiskReason, permit?.effectiveRisk ?? effectiveRisk);
+			await this.recordAssessment(assessment, "allowed", approval);
 			return undefined;
 		}
 		try {
@@ -457,21 +295,9 @@ export class PermissionGate {
 				toolName: call.toolName as "edit" | "write",
 				resource: assessment.resource!,
 			});
-			if (permit && !this.permits.consume(assessment.operationDigest)) {
-				await this.journal!.finalize(journalEntry.id, false);
-				await this.recordAssessment(assessment, "blocked-expired-permit", "denied");
-				return { block: true, reason: "Permission permit expired before execution." };
-			}
-			this.pendingMutations.set(call.toolCallId, {
-				assessment,
-				journalEntry,
-				declaredRisk: permit?.declaredRisk,
-				declaredRiskReason: permit?.declaredRiskReason,
-				effectiveRisk: permit?.effectiveRisk ?? effectiveRisk,
-				approval: reviewApproval ?? permit?.approval,
-			});
+			this.pendingMutations.set(call.toolCallId, { assessment, journalEntry, approval });
 			this.mediumBudget = await this.journal!.usage();
-			await this.recordAssessment(assessment, "allowed", reviewApproval ?? permit?.approval ?? "not-required", permit?.declaredRisk, permit?.declaredRiskReason, permit?.effectiveRisk ?? effectiveRisk);
+			await this.recordAssessment(assessment, "allowed", approval);
 			return undefined;
 		} catch {
 			await this.recordAssessment(assessment, "blocked-journal-failure", "denied");
@@ -487,10 +313,7 @@ export class PermissionGate {
 		await this.recordAssessment(
 			pending.assessment,
 			entry.status === "applied" ? "completed" : succeeded ? "completed-unknown-journal-state" : "failed",
-			pending.approval ?? "not-required",
-			pending.declaredRisk,
-			pending.declaredRiskReason,
-			pending.effectiveRisk ?? pending.assessment.floor,
+			pending.approval,
 		);
 	}
 
@@ -515,7 +338,7 @@ export class PermissionGate {
 				effectiveRisk: "medium",
 				decision: "undone",
 				reversible: true,
-				approval: "confirmed",
+				approval: "allow-once",
 				reason: "Restored the most recent checksum-safe journaled mutation.",
 			});
 			return { ok: true, message: `Restored ${this.journal!.label(entry)} from its journaled pre-image.` };

@@ -1,14 +1,192 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { assessBashCommand } from "./bash-policy.ts";
+import { assessBashCommand, compileCommandPolicy, parseCommandListEntry } from "./bash-policy.ts";
 import { GH_2_89_0_COMMANDS, GH_REFERENCE_VERSION } from "./gh-policy.ts";
 
-async function classify(command: string) {
-	return assessBashCommand(command, await mkdtemp(join(tmpdir(), "pi-permission-bash-policy-")));
+async function workspace() {
+	return mkdtemp(join(tmpdir(), "pi-permission-bash-policy-"));
 }
+
+async function classify(command: string, commandPolicy = compileCommandPolicy({
+	commandAllowlist: [],
+	commandDenylist: [],
+	commandBlocklist: [],
+})) {
+	return assessBashCommand(command, await workspace(), commandPolicy);
+}
+
+test("parses command-list entries as exactly one literal bare segment", () => {
+	const parsed = parseCommandListEntry("git status");
+	assert.deepEqual(parsed, {
+		executable: "git",
+		args: ["status"],
+		key: JSON.stringify(["git", "status"]),
+	});
+
+	for (const entry of [
+		"",
+		"/usr/bin/git status",
+		"command git status",
+		"env git status",
+		"time git status",
+		"MODE=1 git status",
+		"git status > output",
+		"git status && git log",
+		"git status $HOME",
+		"git status *",
+	]) {
+		assert.equal(parseCommandListEntry(entry), undefined, entry);
+	}
+});
+
+test("applies exact block, deny, and allow precedence without weakening hard denials", async () => {
+	const cwd = await workspace();
+	await writeFile(join(cwd, "notes.txt"), "safe\n");
+	const commandPolicy = compileCommandPolicy({
+		commandAllowlist: ["git status", "npm test", "cat .env"],
+		commandDenylist: ["git log", "npm test"],
+		commandBlocklist: ["git push"],
+	});
+
+	const allowed = await assessBashCommand("git status", cwd, commandPolicy);
+	assert.equal(allowed.floor, "low");
+	assert.equal(allowed.offAllowed, true);
+	assert.equal(allowed.forceConfirmation, false);
+
+	const allowCannotBeatDeny = await assessBashCommand("npm test", cwd, commandPolicy);
+	assert.equal(allowCannotBeatDeny.floor, "medium");
+	assert.equal(allowCannotBeatDeny.offAllowed, false);
+	assert.equal(allowCannotBeatDeny.forceConfirmation, true);
+
+	const denied = await assessBashCommand("git log", cwd, commandPolicy);
+	assert.equal(denied.floor, "low");
+	assert.equal(denied.offAllowed, false);
+	assert.equal(denied.forceConfirmation, true);
+
+	const blocked = await assessBashCommand("git push", cwd, commandPolicy);
+	assert.equal(blocked.floor, "high");
+	assert.equal(blocked.hardDeny, true);
+
+	const compound = await assessBashCommand("git status && git log", cwd, commandPolicy);
+	assert.equal(compound.floor, "low");
+	assert.equal(compound.offAllowed, false);
+	assert.equal(compound.forceConfirmation, true);
+
+	const protectedPath = await assessBashCommand("cat .env", cwd, commandPolicy);
+	assert.equal(protectedPath.floor, "high");
+	assert.equal(protectedPath.hardDeny, true);
+
+	const assigned = await assessBashCommand("MODE=1 git status", cwd, commandPolicy);
+	assert.equal(assigned.floor, "high");
+	assert.equal(assigned.offAllowed, false);
+});
+
+test("canonicalizes filesystem reader roots and fails closed on ambiguous operands", async () => {
+	const cwd = await workspace();
+	await writeFile(join(cwd, "notes.txt"), "safe\n");
+
+	for (const command of ["cat notes.txt", "find . -type f", "ls", "du -sh .", "wc -l notes.txt"]) {
+		const result = await assessBashCommand(command, cwd);
+		assert.equal(result.floor, "low", command);
+		assert.equal(result.hardDeny, false, command);
+	}
+
+	for (const command of ["cat ../outside", "find ../outside -type f", "ls ../outside", "du -sh ../outside", "wc -l ../outside"]) {
+		const result = await assessBashCommand(command, cwd);
+		assert.equal(result.floor, "high", command);
+		assert.equal(result.hardDeny, true, command);
+	}
+
+	assert.equal((await assessBashCommand("cat", cwd)).floor, "high");
+	assert.equal((await assessBashCommand("ls --dereference", cwd)).floor, "high");
+});
+
+test("canonicalizes explicit downloader output destinations", async () => {
+	const cwd = await workspace();
+	const safe = [
+		"curl -o download.txt https://example.com/file",
+		"curl --output=download.txt https://example.com/file",
+		"wget -Odownload.txt https://example.com/file",
+		"wget --output-document=download.txt https://example.com/file",
+	];
+	for (const command of safe) {
+		const result = await assessBashCommand(command, cwd);
+		assert.equal(result.floor, "medium", command);
+		assert.equal(result.hardDeny, false, command);
+	}
+
+	for (const command of [
+		"curl -o .env https://example.com/file",
+		"curl --output=.env https://example.com/file",
+		"wget -O ../outside.txt https://example.com/file",
+		"wget --output-document=.env https://example.com/file",
+	]) {
+		const result = await assessBashCommand(command, cwd);
+		assert.equal(result.floor, "high", command);
+		assert.equal(result.hardDeny, true, command);
+	}
+	assert.equal((await assessBashCommand("curl -O https://example.com/file", cwd)).floor, "high");
+	assert.equal((await assessBashCommand("wget https://example.com/file", cwd)).floor, "high");
+});
+
+test("elevates Docker host escapes, all tar extraction forms, and kubectl exec", async () => {
+	const cwd = await workspace();
+	for (const command of [
+		"docker run -v /:/host image",
+		"docker run -v ../private:/mnt image",
+		"docker run -v safe/../../private:/mnt image",
+		"docker run --mount type=bind,source=safe/../../private,target=/mnt image",
+		"docker run -v /tmp:/mnt image",
+		"docker run --mount type=bind,source=../private,target=/mnt image",
+		"docker run --mount type=bind,src=/tmp,dst=/mnt image",
+		"docker run --privileged image",
+		"docker run --pid host image",
+		"docker run --network=host image",
+		"docker run --ipc host image",
+		"docker run --uts=host image",
+		"docker run --cgroupns host image",
+		"docker run --cap-add SYS_ADMIN image",
+		"docker run --unknown image",
+		"tar -xvf archive.tar",
+		"tar xvf archive.tar",
+		"tar --extract -f archive.tar",
+		"kubectl exec pod -- cat README.md",
+		"kubectl -n default exec pod -- cat README.md",
+	]) {
+		assert.equal((await assessBashCommand(command, cwd)).floor, "high", command);
+	}
+	assert.equal((await assessBashCommand("docker run -v cache:/cache image", cwd)).floor, "medium");
+	assert.equal((await assessBashCommand("docker run -v ./cache:/cache image", cwd)).floor, "medium");
+	assert.equal((await assessBashCommand("docker run --mount type=bind,source=./cache,target=/cache image", cwd)).floor, "medium");
+	assert.equal((await assessBashCommand("tar -tf archive.tar", cwd)).floor, "low");
+});
+
+test("marks only bare literal Git commit and push segments for Shield scanning", async () => {
+	const cwd = await workspace();
+	const commit = await assessBashCommand("git commit -m message", cwd);
+	assert.deepEqual(commit.shieldPlans, [{ kind: "commit", args: ["commit", "-m", "message"] }]);
+
+	const push = await assessBashCommand("git push", cwd);
+	assert.deepEqual(push.shieldPlans, [{ kind: "push", args: ["push"] }]);
+
+	const compound = await assessBashCommand("git commit -m message && git push", cwd);
+	assert.deepEqual(compound.shieldPlans, [
+		{ kind: "commit", args: ["commit", "-m", "message"] },
+		{ kind: "push", args: ["push"] },
+	]);
+
+	for (const command of [
+		"command git commit -m message",
+		"MODE=1 git commit -m message",
+		"./git commit -m message",
+		"git commit -m '$MESSAGE'",
+	]) {
+		assert.deepEqual((await assessBashCommand(command, cwd)).shieldPlans, [], command);
+	}
+});
 
 test("classifies control operators and literal nested shell payloads without running them", async () => {
 	for (const command of [
@@ -16,7 +194,6 @@ test("classifies control operators and literal nested shell payloads without run
 		"false || git reset --hard",
 		"git status | rm -rf temporary",
 		"sh -c 'rm -rf temporary'",
-		"kubectl exec pod -- rm -rf temporary",
 		"docker exec container rm -rf temporary",
 		"ssh host 'rm -rf temporary'",
 	]) {
@@ -24,14 +201,15 @@ test("classifies control operators and literal nested shell payloads without run
 		assert.equal(result.floor, "high", command);
 		assert.equal(result.hardDeny, true, command);
 	}
+	assert.equal((await classify("kubectl exec pod -- rm -rf temporary")).floor, "high");
 });
 
 test("rejects ambiguous shell syntax and protects redirect targets", async () => {
-	const workspace = await mkdtemp(join(tmpdir(), "pi-permission-bash-redirect-"));
-	assert.equal((await assessBashCommand("echo result > output.txt", workspace)).floor, "medium");
+	const cwd = await workspace();
+	assert.equal((await assessBashCommand("echo result > output.txt", cwd)).floor, "medium");
 
 	for (const command of ["echo $(date)", "echo 'unterminated", "echo secret > .env", "echo data > /dev/null"]) {
-		const result = await assessBashCommand(command, workspace);
+		const result = await assessBashCommand(command, cwd);
 		assert.equal(result.floor, "high", command);
 		assert.equal(result.hardDeny, command.includes("> .env") || command.includes("/dev/null"), command);
 	}
@@ -80,7 +258,7 @@ test("classifies every documented GitHub CLI command and its safety overrides", 
 		["gh release download --output", "high", false],
 		["gh auth status -t=token", "high", true],
 		["gh run download --dir", "high", false],
-	] as const) {
+	]) {
 		const result = await classify(command);
 		assert.equal(result.floor, floor, command);
 		assert.equal(result.hardDeny, hardDeny, command);
@@ -110,7 +288,7 @@ test("rejects unsafe GitHub executable, alias, credential, and path forms", asyn
 		["gh attestation verify artifact.bin --bundle ../bundle.jsonl --repo cli/cli", true],
 		["gh attestation verify artifact.bin --custom-trusted-root ../root.jsonl --repo cli/cli", true],
 		["gh release verify-asset v1 ../outside.bin", true],
-	] as const) {
+	]) {
 		const result = await classify(command);
 		assert.equal(result.floor, "high", command);
 		assert.equal(result.hardDeny, hardDeny, command);
