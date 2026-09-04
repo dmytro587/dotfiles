@@ -1,7 +1,6 @@
 # If you come from bash you might have to change your $PATH.
 # export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH
 
-export PATH="/usr/local/opt/postgresql@15/bin:$PATH"
 export PATH=$PATH:$HOME/go/bin
 export PATH=$PATH:/opt/homebrew/bin
 
@@ -74,7 +73,7 @@ ZSH_THEME="robbyrussell"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git aws)
+plugins=(git aws zsh-autosuggestions)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -109,16 +108,12 @@ source $ZSH/oh-my-zsh.sh
 
 # Add alias for GO
 export PATH=$PATH:/usr/local/go/bin
-export PATH=$PATH:$GOPATH/bin
 
 # Add alias for poetry
 export PATH="$HOME/.local/bin:$PATH"
 
 # Add alias to ablity to open Sublime text from terminal
 export PATH="/Applications/Sublime Text.app/Contents/SharedSupport/bin:$PATH"
-
-# Path to your oh-my-zsh installation.
-export ZSH="$HOME/.oh-my-zsh"
 
 # Fix issue with command not found
 export PATH=/bin:/usr/bin:/usr/local/bin:/sbin:${PATH}
@@ -147,9 +142,6 @@ source <(kubectl completion zsh)
 # Set theme for bat
 alias bat="bat --theme=TwoDark --color=always --paging=never"
 
-# Set default options for lsd
-alias lsd="lsd --icon=never --color=never"
-
 # fzf
 source <(fzf --zsh)
 
@@ -166,7 +158,11 @@ export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 
 # FZF with Git right in the shell by Junegunn : check out his github below
 # Keymaps for this is available at https://github.com/junegunn/fzf-git.sh
-source <(curl -fsSL https://raw.githubusercontent.com/junegunn/fzf-git.sh/refs/heads/main/fzf-git.sh)
+# Pinned to a local copy: curl -fsSL -o ~/.config/fzf-git.sh \
+#   https://raw.githubusercontent.com/junegunn/fzf-git.sh/refs/heads/main/fzf-git.sh
+source "$HOME/.config/fzf-git.sh"
+# NOTE: this pins a local copy, so it does NOT auto-update from upstream.
+# New fzf-git versions must be fetched manually by re-running the curl above.
 
 # fzf git branch alias
 alias git-branch='git branch | fzf | cut -c 3- | xargs git checkout'

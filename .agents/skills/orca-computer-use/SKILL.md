@@ -1,5 +1,5 @@
 ---
-name: orca-computer-use
+name: computer-use
 description: >-
   Use Orca's computer-use CLI to inspect and operate local desktop app windows
   through accessibility trees, screenshots, and safe UI actions. Use for

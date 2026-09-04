@@ -33,11 +33,41 @@ fi
 
 # Copy all dotfiles to the home directory
 echo "Copying dotfiles to home directory"
-cp ./.* $HOME
+shopt -s nullglob
+for dotfile in .[!.]*; do
+  cp -R "$dotfile" "$HOME/"
+done
+shopt -u nullglob
+
+# Seed shared agent instructions from the repository; the link step below depends on this file.
+mkdir -p "$HOME/.agents"
+install -m 0644 ./.agents/AGENTS.md "$HOME/.agents/AGENTS.md"
 
 # Install the explicitly ordered Pi permission gate without replacing other Pi settings.
-echo "Installing Pi permission gate"
 bash ./.pi/install_pi_permission_gate.sh
+
+echo "Installing coding agents"
+if ! command -v droid &> /dev/null; then
+  echo "Installing Droid CLI"
+  curl -fsSL https://app.factory.ai/cli | sh
+fi
+
+if ! command -v omp &> /dev/null; then
+  echo "Installing OMP (Oh My Pi)"
+  curl -fsSL https://omp.sh/install | sh
+fi
+
+# Link shared agent instructions into agent folders that already exist, so no folder is created and no dangling link is left.
+for agent_dir in "$HOME/.omp" "$HOME/.factory"; do
+  if [ -d "$agent_dir" ]; then
+    ln -sfn "$HOME/.agents/AGENTS.md" "$agent_dir/AGENTS.md"
+  fi
+done
+
+if ! command -v pi &> /dev/null; then
+  echo "Installing Pi coding agent"
+  npm install -g @earendil-works/pi-coding-agent
+fi
 
 # Apply new shell configuration
 source $HOME/.zshrc
