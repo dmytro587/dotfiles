@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { VERSION, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { redactText } from "./audit.ts";
 import { loadPermissionPolicy } from "./config.ts";
@@ -38,10 +38,8 @@ export default async function permissionGateExtension(pi: ExtensionAPI): Promise
 			pi.appendEntry(ENTRY_TYPE, { kind: "audit", event });
 		},
 	});
-	const runtimeFailure = loaded.error ?? (VERSION === loaded.policy.testedPiVersion
-		? undefined
-		: `Permission gate supports Pi ${loaded.policy.testedPiVersion}; this runtime is ${VERSION}.`);
-	gate.setRuntimeFailure(runtimeFailure);
+	const unavailableReason = loaded.error;
+	gate.setUnavailableReason(unavailableReason);
 	gate.setInheritedRevisionMismatch(inheritedRevision !== undefined && inheritedRevision !== loaded.revision);
 
 	const persistSessionMode = (mode: AutonomyMode, ctx: ExtensionContext) => {
@@ -136,12 +134,12 @@ export default async function permissionGateExtension(pi: ExtensionAPI): Promise
 		if (isAutonomyMode(flagMode)) gate.setMode(flagMode);
 		else if (restoredMode) gate.setMode(restoredMode);
 		ctx.ui.setStatus(ENTRY_TYPE, `permission: ${gate.getMode()}`);
-		if (runtimeFailure && ctx.hasUI) ctx.ui.notify(runtimeFailure, "error");
+		if (unavailableReason && ctx.hasUI) ctx.ui.notify(unavailableReason, "error");
 	});
 
 	pi.on("before_agent_start", async (event) => {
-		if (runtimeFailure) {
-			return { systemPrompt: `${event.systemPrompt}\n\nPermission gate is unavailable: ${runtimeFailure} Do not attempt any tool calls.` };
+		if (unavailableReason) {
+			return { systemPrompt: `${event.systemPrompt}\n\nPermission gate is unavailable: ${unavailableReason} Do not attempt any tool calls.` };
 		}
 		const mode = gate.getMode();
 		const protocol = mode === "off"
@@ -155,7 +153,7 @@ export default async function permissionGateExtension(pi: ExtensionAPI): Promise
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
-		if (runtimeFailure) return { block: true, reason: runtimeFailure };
+		if (unavailableReason) return { block: true, reason: unavailableReason };
 		if (INTERNAL_TOOLS.has(event.toolName)) return;
 		try {
 			return await gate.handleToolCall({

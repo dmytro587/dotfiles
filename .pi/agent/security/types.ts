@@ -11,8 +11,7 @@ export interface ShieldPlan {
 }
 
 export interface PermissionPolicyConfig {
-	version: 2;
-	testedPiVersion: string;
+	version: 3;
 	defaultAutonomy: AutonomyMode;
 	commandAllowlist: string[];
 	commandDenylist: string[];

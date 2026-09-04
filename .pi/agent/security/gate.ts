@@ -72,7 +72,7 @@ export class PermissionGate {
 	private session?: GateSession;
 	private mediumBudget = { fileCount: 0, snapshotBytes: 0 };
 	private mode: AutonomyMode;
-	private runtimeFailure?: string;
+	private unavailableReason?: string;
 	private inheritedRevisionMismatch = false;
 
 	constructor(options: GateOptions) {
@@ -83,8 +83,8 @@ export class PermissionGate {
 		this.mode = options.policy.defaultAutonomy;
 	}
 
-	setRuntimeFailure(reason: string | undefined): void {
-		this.runtimeFailure = reason;
+	setUnavailableReason(reason: string | undefined): void {
+		this.unavailableReason = reason;
 	}
 
 	setInheritedRevisionMismatch(mismatch: boolean): void {
@@ -124,7 +124,7 @@ export class PermissionGate {
 	}
 
 	private unavailable(): string | undefined {
-		if (this.runtimeFailure) return this.runtimeFailure;
+		if (this.unavailableReason) return this.unavailableReason;
 		if (!this.session || !this.journal) return "Permission gate has not initialized its session state.";
 		return undefined;
 	}

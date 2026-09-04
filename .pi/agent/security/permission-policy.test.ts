@@ -8,8 +8,7 @@ import { compileCommandPolicy } from "./bash-policy.ts";
 import type { PermissionPolicyConfig } from "./types.ts";
 
 const policy: PermissionPolicyConfig = {
-	version: 2,
-	testedPiVersion: "0.83.0",
+	version: 3,
 	defaultAutonomy: "off",
 	commandAllowlist: [],
 	commandDenylist: [],
@@ -96,7 +95,7 @@ test("allows validated globbed search paths while denying protected or escaping 
 test("classifies bounded ripgrep inspection and shell formatting as read-only", async () => {
 	const workspace = await mkdtemp(join(tmpdir(), "pi-permission-rg-"));
 	const safe = context(workspace);
-	const reported = "printf '%s\\n' '--- skills ---'; find .agents/skills -mindepth 1 -maxdepth 1 -type d -printf '%f\\n' | sort; printf '%s\\n' '--- references ---'; rg -n --glob '!node_modules/**' '(grafana-alerting-irm|orca-computer-use|orca-orchestration)' . || true; printf '%s\\n' '--- status ---'; git status --short";
+	const reported = "printf '%s\\n' '--- skills ---'; find .agents/skills -mindepth 1 -maxdepth 1 -type d -printf '%f\\n' | sort; printf '%s\\n' '--- references ---'; rg -n --glob '!node_modules/**' '(grafana-alerting-irm|computer-use|orchestration)' . || true; printf '%s\\n' '--- status ---'; git status --short";
 
 	assert.equal((await assess("bash", { command: "sort -o sorted.txt" }, safe)).floor, "high");
 	assert.equal((await assess("bash", { command: reported }, safe)).floor, "low");

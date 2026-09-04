@@ -1,6 +1,5 @@
 {
-  "version": 2,
-  "testedPiVersion": "0.83.0",
+  "version": 3,
   "defaultAutonomy": "off",
   "commandAllowlist": [],
   "commandDenylist": [],

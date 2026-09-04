@@ -48,7 +48,7 @@ flowchart TD
 | `journal.ts` | Private pre-image snapshots and checksum-safe undo for supported workspace-text mutations. |
 | `false-positive-journal.ts` | Non-authorizing audit record for a deterministic-High Allow once decision. |
 | `audit.ts` | Redacted JSONL operation audit. |
-| `config.ts` and `types.ts` | Version-2 policy validation and shared contracts. |
+| `config.ts` and `types.ts` | Version-3 policy validation and shared contracts. |
 
 ## Decision flow
 
@@ -91,11 +91,11 @@ Hard denials take precedence over every mode and every command list. A negative 
 
 ## Policy file and exact command lists
 
-`permission-policy.json` is schema version 2. Its checked-in default is Off with empty command lists:
+`permission-policy.json` is schema version 3. It deliberately does not encode a Pi release: policy validity is independent of the runtime version, and the extension-load integration test verifies the current Pi runtime. Its checked-in default is Off with empty command lists:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "defaultAutonomy": "off",
   "commandAllowlist": [],
   "commandDenylist": [],
@@ -169,4 +169,4 @@ npm run test:permission-gate
 bash ./install_pi_permission_gate.sh
 ```
 
-The installer copies runtime TypeScript modules with private permissions, skips test modules, removes the two retired runtime modules from an existing installation, installs the version-2 policy, and updates only the configured `extensions` array in `settings.json`.
+The installer copies runtime TypeScript modules with private permissions, skips test modules, removes the two retired runtime modules from an existing installation, installs the version-3 policy, and updates only the configured `extensions` array in `settings.json`.

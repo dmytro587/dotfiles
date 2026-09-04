@@ -5,8 +5,7 @@ import { sha256, stableJson } from "./canonical.ts";
 import { isAutonomyMode, type PermissionPolicyConfig } from "./types.ts";
 
 export const FALLBACK_POLICY: PermissionPolicyConfig = {
-	version: 2,
-	testedPiVersion: "0.83.0",
+	version: 3,
 	defaultAutonomy: "off",
 	commandAllowlist: [],
 	commandDenylist: [],
@@ -23,7 +22,6 @@ export const FALLBACK_POLICY: PermissionPolicyConfig = {
 const FALLBACK_COMMAND_POLICY = compileCommandPolicy(FALLBACK_POLICY);
 const POLICY_KEYS: Record<string, true> = {
 	version: true,
-	testedPiVersion: true,
 	defaultAutonomy: true,
 	commandAllowlist: true,
 	commandDenylist: true,
@@ -55,19 +53,17 @@ function isStringArray(value: unknown): value is string[] {
 
 function parsePolicy(value: unknown): PermissionPolicyConfig {
 	if (!value || typeof value !== "object" || Array.isArray(value)) {
-		throw new Error("Policy must be a version-2 object without unsupported keys.");
+		throw new Error("Policy must be a version-3 object without unsupported keys.");
 	}
 	const policy = value as Record<string, unknown>;
-	if (!Object.keys(policy).every((key) => POLICY_KEYS[key]) || policy.version !== 2) {
-		throw new Error("Policy must be a version-2 object without unsupported keys.");
+	if (!Object.keys(policy).every((key) => POLICY_KEYS[key]) || policy.version !== 3) {
+		throw new Error("Policy must be a version-3 object without unsupported keys.");
 	}
 	if (!policy.limits || typeof policy.limits !== "object" || Array.isArray(policy.limits)) {
 		throw new Error("Policy has an unsupported shape or invalid limit.");
 	}
 	const limits = policy.limits as Record<string, unknown>;
 	if (
-		typeof policy.testedPiVersion !== "string" ||
-		policy.testedPiVersion.trim() === "" ||
 		!isAutonomyMode(policy.defaultAutonomy) ||
 		!isStringArray(policy.commandAllowlist) ||
 		!isStringArray(policy.commandDenylist) ||
@@ -82,8 +78,7 @@ function parsePolicy(value: unknown): PermissionPolicyConfig {
 		throw new Error("Policy has an unsupported shape or invalid limit.");
 	}
 	return {
-		version: 2,
-		testedPiVersion: policy.testedPiVersion,
+		version: 3,
 		defaultAutonomy: policy.defaultAutonomy,
 		commandAllowlist: policy.commandAllowlist,
 		commandDenylist: policy.commandDenylist,

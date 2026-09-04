@@ -8,8 +8,7 @@ import { FALLBACK_POLICY, loadPermissionPolicy } from "./config.ts";
 
 function validPolicy() {
 	return {
-		version: 2,
-		testedPiVersion: "0.83.0",
+		version: 3,
 		defaultAutonomy: "off",
 		commandAllowlist: ["git status"],
 		commandDenylist: ["git log"],
@@ -30,7 +29,7 @@ async function policyDirectory(content?: string) {
 	return directory;
 }
 
-test("loads a complete version-2 policy and compiles its literal command lists once", async () => {
+test("loads a complete version-3 policy and compiles its literal command lists once", async () => {
 	const directory = await policyDirectory(JSON.stringify(validPolicy()));
 	const loaded = await loadPermissionPolicy(directory);
 	const status = parseCommandListEntry("git status");
@@ -51,10 +50,12 @@ test("fails closed for absent, malformed, legacy, and invalid policy shapes", as
 		["missing", undefined],
 		["malformed", "{not-json"],
 		["version one", { ...valid, version: 1 }],
+		["version two", { ...valid, version: 2 }],
 		["invalid mode", { ...valid, defaultAutonomy: "auto" }],
 		["non-array list", { ...valid, commandAllowlist: "git status" }],
 		["non-string entry", { ...valid, commandAllowlist: ["git status", 7] }],
 		["unsupported policy key", { ...valid, unexpected: true }],
+		["legacy runtime pin", { ...valid, testedPiVersion: "0.83.0" }],
 		["unsupported limits key", { ...valid, limits: { ...valid.limits, unexpected: true } }],
 		["invalid limit", { ...valid, limits: { ...valid.limits, maxGitDiffBytes: 0 } }],
 		["non-finite limit", { ...valid, limits: { ...valid.limits, maxGitDiffBytes: Number.POSITIVE_INFINITY } }],

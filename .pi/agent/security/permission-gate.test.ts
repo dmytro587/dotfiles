@@ -30,8 +30,7 @@ function policyFor(options: {
 	commandBlocklist?: string[];
 } = {}): PermissionPolicyConfig {
 	return {
-		version: 2,
-		testedPiVersion: "0.83.0",
+		version: 3,
 		defaultAutonomy: options.defaultAutonomy ?? "off",
 		commandAllowlist: options.commandAllowlist ?? [],
 		commandDenylist: options.commandDenylist ?? [],

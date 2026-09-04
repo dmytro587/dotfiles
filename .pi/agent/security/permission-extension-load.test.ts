@@ -28,15 +28,14 @@ function runPi(agentDirectory: string, args: string[] = []): Promise<{ code: num
 	});
 }
 
-test("loads the explicitly configured permission extension on the pinned Pi runtime", async () => {
+test("loads the explicitly configured permission extension on the installed Pi runtime without a release pin", async () => {
 	const root = await mkdtemp(join(tmpdir(), "pi-permission-extension-"));
 	const agentDirectory = join(root, "agent");
 	await mkdir(agentDirectory, { recursive: true });
 	await writeFile(
 		join(agentDirectory, "permission-policy.json"),
 		JSON.stringify({
-			version: 2,
-			testedPiVersion: "0.83.0",
+			version: 3,
 			defaultAutonomy: "off",
 			commandAllowlist: [],
 			commandDenylist: [],
