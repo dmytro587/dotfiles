@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Goods research</title>
+  <link rel="stylesheet" href="/catalog.css">
+</head>
+<body>
+  <header class="page-hero">
+    <div class="shell">
+      <p class="eyebrow">Local Pi research</p>
+      <h1>Verified goods, not search-result guesses.</h1>
+      <p class="page-lead">Describe the product need. The local agent applies the repository’s goods-research rubric, verifies exact offers, and returns direct links, tradeoffs, sources, images, and explicit unknowns.</p>
+    </div>
+  </header>
+  <main class="shell">
+    <p id="readiness-message" class="readiness-message" hidden></p>
+    <form id="research-form" class="research-form">
+      <label class="field full-width" for="request">
+        What are you looking for?
+        <textarea id="request" name="request" required maxlength="8000" placeholder="For example: Find men’s cycling bib shorts for 4–6 hour rides under $100."></textarea>
+      </label>
+      <div class="field-grid">
+        <label class="field" for="deliveryMarket">
+          Delivery country
+          <select id="deliveryMarket" name="deliveryMarket" disabled aria-describedby="delivery-market-hint">
+            <option value="">Loading current countries…</option>
+          </select>
+          <small id="delivery-market-hint" class="market-hint">Current ISO 4217 country and currency data loads before local-market research can start.</small>
+        </label>
+        <fieldset class="budget-range full-width">
+          <legend>Budget range</legend>
+          <div class="budget-range-fields">
+            <label class="field" for="budgetMin">
+              Minimum
+              <input id="budgetMin" name="budgetMin" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0" aria-describedby="budget-range-hint">
+            </label>
+            <label class="field" for="budgetMax">
+              Maximum
+              <input id="budgetMax" name="budgetMax" type="number" min="0" step="0.01" inputmode="decimal" placeholder="No limit" aria-describedby="budget-range-hint">
+            </label>
+            <label class="field" for="budgetCurrency">
+              Currency
+              <input id="budgetCurrency" name="budgetCurrency" maxlength="3" pattern="[A-Za-z]{3}" autocapitalize="characters" placeholder="USD" aria-describedby="budget-range-hint">
+            </label>
+          </div>
+          <p id="budget-range-hint" class="budget-range-hint">Set either bound or both. A three-letter currency code is required when a bound is set. Local-market research converts foreign bounds using a current verified rate.</p>
+        </fieldset>
+        <label class="field" for="deadline">
+          Deadline
+          <input id="deadline" name="deadline" maxlength="2000" placeholder="When you need it">
+        </label>
+        <label class="field" for="hardRequirements">
+          Hard requirements
+          <input id="hardRequirements" name="hardRequirements" maxlength="2000" placeholder="Fit, compatibility, safety, exact model">
+        </label>
+        <label class="field full-width scope-option" for="localMarketOnly">
+          Retailer location
+          <span class="scope-control">
+            <input id="localMarketOnly" name="localMarketOnly" type="checkbox" disabled>
+            Search only retailers based in the delivery country
+          </span>
+          <small>Requires a delivery country. Cross-border marketplaces and sellers without a verified local presence are excluded.</small>
+        </label>
+        <label id="local-market-currency-field" class="field full-width" for="localMarketCurrency" hidden>
+          Local market currency
+          <select id="localMarketCurrency" name="localMarketCurrency" disabled>
+            <option value="">Select a delivery country first</option>
+          </select>
+          <small class="market-hint">Automatic when the current ISO record has one legal-tender currency. Choose explicitly only when it has several.</small>
+        </label>
+        <label class="field full-width" for="preferences">
+          Preferences
+          <input id="preferences" name="preferences" maxlength="2000" placeholder="Weight, style, brand, comfort, or priorities">
+        </label>
+      </div>
+      <p class="field-hint">The agent asks at most one clarification, only when an unanswered hard gate could change the winner.</p>
+      <div class="form-actions">
+        <button id="submit-button" class="button" type="submit">Research products</button>
+        <button id="cancel-button" class="button secondary-button" type="button" hidden>Cancel research</button>
+      </div>
+    </form>
+    <section id="session-panel" class="session-panel" hidden aria-live="polite">
+      <h2>Research status</h2>
+      <p id="status-line" class="status-line">Preparing the local research agent.</p>
+      <div id="question-panel" class="question-panel" hidden></div>
+      <p id="error-message" class="error-message" hidden></p>
+      <div id="session-actions" class="session-actions" hidden>
+        <a id="export-link" class="button secondary-button" download>Download standalone report</a>
+      </div>
+    </section>
+    <section id="catalog-root" aria-live="polite"></section>
+  </main>
+  <script id="goods-research-readiness" type="application/json">__GOODS_RESEARCH_READINESS__</script>
+  <script src="/catalog.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
