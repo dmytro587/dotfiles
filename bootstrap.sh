@@ -9,6 +9,7 @@
 # 5. Apply new shell configuration
 # 6. Install Yarn if not already installed
 # 7. Install Google Cloud CLI if not already installed
+# 8. Set up coding agents (see bootstrap_agents.sh)
 #
 # Usage: ./bootstrap.sh
 
@@ -31,43 +32,18 @@ if [ -d "$HOME/.zshrc" ]; then
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 fi
 
-# Copy all dotfiles to the home directory
+# Copy non-agent dotfiles to the home directory
 echo "Copying dotfiles to home directory"
 shopt -s nullglob
 for dotfile in .[!.]*; do
+  # Agent setup owns these directories; subagent artifacts stay in the repository.
+  case "$dotfile" in
+    .agents|.claude|.omp|.pi) continue ;;
+  esac
   cp -R "$dotfile" "$HOME/"
 done
 shopt -u nullglob
 
-# Seed shared agent instructions from the repository; the link step below depends on this file.
-mkdir -p "$HOME/.agents"
-install -m 0644 ./.agents/AGENTS.md "$HOME/.agents/AGENTS.md"
-
-# Install the explicitly ordered Pi permission gate without replacing other Pi settings.
-bash ./.pi/install_pi_permission_gate.sh
-
-echo "Installing coding agents"
-if ! command -v droid &> /dev/null; then
-  echo "Installing Droid CLI"
-  curl -fsSL https://app.factory.ai/cli | sh
-fi
-
-if ! command -v omp &> /dev/null; then
-  echo "Installing OMP (Oh My Pi)"
-  curl -fsSL https://omp.sh/install | sh
-fi
-
-# Link shared agent instructions into agent folders that already exist, so no folder is created and no dangling link is left.
-for agent_dir in "$HOME/.omp" "$HOME/.factory"; do
-  if [ -d "$agent_dir" ]; then
-    ln -sfn "$HOME/.agents/AGENTS.md" "$agent_dir/AGENTS.md"
-  fi
-done
-
-if ! command -v pi &> /dev/null; then
-  echo "Installing Pi coding agent"
-  npm install -g @earendil-works/pi-coding-agent
-fi
 
 # Apply new shell configuration
 source $HOME/.zshrc
@@ -92,3 +68,6 @@ if ! command -v gcloud &> /dev/null; then
   # Clean up
   rm /tmp/google-cloud-cli.tar.gz
 fi
+
+# Delegate all agent setup, including skills and configuration.
+bash ./bootstrap_agents.sh

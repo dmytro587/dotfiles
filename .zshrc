@@ -142,6 +142,9 @@ source <(kubectl completion zsh)
 # Set theme for bat
 alias bat="bat --theme=TwoDark --color=always --paging=never"
 
+# kubectl alias
+alias k="kubectl"
+
 # fzf
 source <(fzf --zsh)
 

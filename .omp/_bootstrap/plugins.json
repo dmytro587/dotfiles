@@ -1,0 +1,7 @@
+{
+  "pi-provider-factory": {
+    "source": "~/Documents/www/pi-provider-factory",
+    "sourceEnv": "OMP_FACTORY_PLUGIN_SOURCE",
+    "targets": ["user", "profile:personal"]
+  }
+}
