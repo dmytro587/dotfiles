@@ -1,18 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/src/config/mcp-schema.json",
-  "mcpServers": {
-    "silpo": {
-      "type": "http",
-      "url": "https://mcp.silpo.ua/mcp"
-    },
-    "strava": {
-      "type": "http",
-      "url": "https://mcp.strava.com/mcp"
-    }
-  },
+  "mcpServers": {},
   "disabledServers": [
-    "chrome-devtools",
-    "headroom",
-    "silpo"
+    "chrome-devtools"
   ]
 }

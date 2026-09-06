@@ -115,6 +115,9 @@ export PATH="$HOME/.local/bin:$PATH"
 # Add alias to ablity to open Sublime text from terminal
 export PATH="/Applications/Sublime Text.app/Contents/SharedSupport/bin:$PATH"
 
+# Add bun binaries to PATH
+export PATH="$HOME/.bun/bin:$PATH"
+
 # Fix issue with command not found
 export PATH=/bin:/usr/bin:/usr/local/bin:/sbin:${PATH}
 
