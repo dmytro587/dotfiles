@@ -28,12 +28,25 @@ fi
 
 # Configure agents
 # Copy repository files without deleting files that exist only in HOME.
+# A skill whose repo directory has no SKILL.md but has DISABLED_SKILL.md is
+# disabled: the home copy must not gain a SKILL.md, and an existing home
+# SKILL.md is removed so a locally disabled skill stays disabled after sync.
 for agent_dir in .agents .claude .omp .pi; do
   mkdir -p "$HOME/$agent_dir"
   if [ "$agent_dir" = .omp ]; then
     rsync -a --exclude=_bootstrap "./$agent_dir/" "$HOME/$agent_dir/"
   else
     rsync -a "./$agent_dir/" "$HOME/$agent_dir/"
+  fi
+  if [ "$agent_dir" = .agents ]; then
+    for skill_dir in .agents/skills/*/; do
+      skill=$(basename "$skill_dir")
+      if [ ! -f ".agents/skills/$skill/SKILL.md" ] && [ -f ".agents/skills/$skill/DISABLED_SKILL.md" ]; then
+        if [ -e "$HOME/.agents/skills/$skill" ] && [ ! -L "$HOME/.agents/skills/$skill" ]; then
+          rm -f "$HOME/.agents/skills/$skill/SKILL.md"
+        fi
+      fi
+    done
   fi
 done
 

@@ -7,6 +7,7 @@
 - Avoid explicit return types unless absolutely needed;
 - Typescript: `as any` should be an absolute last resort. Always use real type safety. Lean on type inference instead of manually writing new types over and over again;
 - Never use double-dash;
+- NEVER use `prettier` and similar tools to check/format markdown files;
 
 ## Dotfiles sync
 
@@ -35,5 +36,13 @@
 
 ## Communication
 
-- Always use ASD-STE100 Simplified Technical English when you talk to me.
+- Use Simplified Technical English: short sentences, active voice, common words.
+- In final responses, lead with the outcome, then include only what the user needs to understand or verify it.
+- Before a long-running step, post one brief progress note. Do not interrupt short work or recap after every tool call.
+- Name what a tool accomplished, not the tool. Include identifiers only when the user is working with them.
+- Format only when structure carries meaning. No emojis unless requested.
+- Use a comma, parenthesis, or separate sentence in place of an em dash.
+- Report validation faithfully: the checks you ran, the ones that failed, and the ones you skipped.
+- You use your AskUser tool for blocking clarification instead of asking a plain-text question.
+- Use a visualization only when it materially improves understanding
 
