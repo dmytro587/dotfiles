@@ -9,6 +9,12 @@ hidden: true
 
 Fast browser automation CLI for AI agents. Chrome/Chromium via CDP with accessibility-tree snapshots and compact `@eN` element refs.
 
+## Routing by surface
+
+Route by the actual target surface, not by preference: Orca's embedded browser and Orca desktop state go to `orca-cli`/`orca-computer-use`; OS-level desktop windows outside Orca go to `orca-computer-use`; external web pages, DOM automation, and Electron apps come here. Do not claim tasks the routing sends elsewhere.
+
+Before mutating anything (logging in, sending messages, posting), confirm the user asked for that action. Load the version-matched guide below and follow its auth safeguards; this stub does not establish them.
+
 ## Start here
 
 This file is a discovery stub, not the usage guide. Before running any `agent-browser` command, load the actual workflow content from the CLI:

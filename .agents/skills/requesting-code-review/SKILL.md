@@ -5,7 +5,7 @@ description: Use when completing tasks, implementing major features, or before m
 
 # Requesting Code Review
 
-Dispatch superpowers:code-reviewer subagent to catch issues before they cascade. The reviewer gets precisely crafted context for evaluation — never your session's history. This keeps the reviewer focused on the work product, not your thought process, and preserves your own context for continued work.
+Dispatch a code-reviewer subagent (superpowers:code-reviewer type) to catch issues before they cascade. The reviewer gets precisely crafted context for evaluation — never your session's history. This keeps the reviewer focused on the work product, not your thought process, and preserves your own context for continued work. If the superpowers:code-reviewer agent type is unavailable, report that and use the nearest supported reviewer dispatch instead of silently reviewing in-session.
 
 **Core principle:** Review early, review often.
 
@@ -23,11 +23,13 @@ Dispatch superpowers:code-reviewer subagent to catch issues before they cascade.
 
 ## How to Request
 
-**1. Get git SHAs:**
+**1. Get git SHAs — capture the real task range:**
 ```bash
-BASE_SHA=$(git rev-parse HEAD~1)  # or origin/main
+# Task start SHA, not a fixed HEAD~1: find the commit where this unit of work began.
+BASE_SHA=$(git rev-parse <task-start>)   # e.g. origin/main, or the commit before this task's first commit
 HEAD_SHA=$(git rev-parse HEAD)
 ```
+Uncommitted work is invisible to a SHA-range diff. If the reviewed work includes uncommitted changes, tell the reviewer explicitly (list the files or pass `git diff` output in the prompt) instead of letting the range silently exclude them.
 
 **2. Dispatch code-reviewer subagent:**
 
@@ -41,8 +43,8 @@ Use Task tool with superpowers:code-reviewer type, fill template at `code-review
 - `{DESCRIPTION}` - Brief summary
 
 **3. Act on feedback:**
-- Fix Critical issues immediately
-- Fix Important issues before proceeding
+- Fix Critical issues immediately, but only when the user asked for implementation, not a review-only request; report instead when review-only
+- Fix Important issues before proceeding (same authority rule)
 - Note Minor issues for later
 - Push back if reviewer is wrong (with reasoning)
 

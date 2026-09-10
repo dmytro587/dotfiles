@@ -16,7 +16,7 @@ Write PR descriptions for reviewers, not for local implementation planning.
 - Add a `## Testing` section only when it gives reviewers a meaningful, reproducible way to verify the changed behavior. Omit it when the available evidence is only routine syntax, formatting, diff-hygiene, or other pre-merge checks.
 - A command by itself is not useful testing evidence. Include it only with the behavior it verifies and its result; do not turn incomplete local status into a PR-body checklist.
 - Include manual verification steps when the PR changes deployed infrastructure or UI-visible behavior.
-- Include secrets, port-forwarding, URLs, or dashboard paths needed for reviewers to verify the change.
+- If reviewers need credentials or internal endpoints to verify the change, document how to read the relevant secret. NEVER include secret values, tokens, or passwords in the PR body.
 - Use Mermaid diagrams only when they clarify runtime flow. Keep labels accurate and scoped to the actual config.
 - When explaining a technology choice, include the real selection reason: maintainership, adoption, official or widely used references, integration value, operational tradeoff, or compatibility with existing project constraints.
 - Return the final PR description as Markdown only for the PR body; do not edit the PR directly.
@@ -29,7 +29,7 @@ If the source of changes is not explicit, stop and ask the user to choose one sc
 - Review the remote branch plus local changes against the base branch.
 - Review only the local diff.
 
-Use exactly the scope the user picked; do not mix scopes or silently fall back to another one.
+Use exactly the scope the user picked; do not mix scopes or silently fall back to another one. When the scope includes local changes, also enumerate untracked files and ask whether they belong in the description.
 
 1. Remote branch against the base branch:
  `gh pr view`
@@ -82,7 +82,6 @@ sequenceDiagram
 - Keep decision rationale dense. Do not expand it with generic benefits; name the concrete reason the chosen option is better than the main alternative.
 - If the PR adds a setup or rollout script, mention what it installs or changes and where it runs.
 - If the PR adds UI, dashboards, or deployed infrastructure, include the access path reviewers need to inspect it.
-- If credentials are needed for review, document how to read the relevant secret without exposing secret values in the PR body.
-- Do not report failed checks caused by this PR as a known issue; fix them before the PR is ready. Mention an unrelated validation failure only when it materially affects reviewer verification, and include the command, failure, and why it is unrelated.
+- A failed check caused by this PR means the PR is not ready: fix it, do not describe it as a known issue. Disclose material verification limits in the body (for example, "full suite not run; auth tests pass") instead of omitting them when they affect reviewer judgment. Mention an unrelated validation failure only when it materially affects reviewer verification, and include the command, failure, and why it is unrelated.
 - Omit `## Testing` rather than filling it with `bash -n`, `git diff --check`, formatting, or similar hygiene output. These can support local confidence, but they do not tell reviewers how the change works or what to verify.
 - If a diagram is included, keep it at the level of actual runtime behavior. Do not add speculative or future components.

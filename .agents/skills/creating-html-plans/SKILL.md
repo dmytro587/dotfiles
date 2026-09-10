@@ -7,6 +7,10 @@ description: "Use when converting plans, roadmaps, specifications, checklists, r
 
 ## Overview
 
+## Scope
+
+Use this skill for explicitly requested HTML artifacts. It is not the default format for ordinary planning or explanations; do not convert a plan to HTML unless the user asked for that artifact. Keep issue files and the canonical source of truth in their original format.
+
 Create visual planning surfaces, not decorated markdown. Preserve source truth.
 
 ## Rules
@@ -15,9 +19,9 @@ Create visual planning surfaces, not decorated markdown. Preserve source truth.
 2. **Adapt the model.** Never force every plan into one dashboard.
 3. **Standalone is literal.** One HTML file; inline CSS/JS/SVG; no network assets.
 4. **UI state is not source state.** Say checkboxes and filters do not update the source.
-5. **Search is required.** Every plan must contain a visible search input that filters its content.
+5. **Search is required — for full artifacts.** Every standalone plan artifact contains a visible search input that filters its content. A small single-purpose snippet may skip search, but then it is not a full artifact.
 6. **No print control.** Never include a Print button, `window.print()` action, or other print-triggering UI.
-7. **Browser verification is mandatory.** Exercise the file before claiming completion.
+7. **Browser verification is mandatory** before claiming the artifact renders and works. For a small snippet, one desktop check can suffice; state what you checked.
 
 ## Visual Grammar
 

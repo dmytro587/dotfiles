@@ -4,7 +4,8 @@ description: >
   Compress natural language memory files (CLAUDE.md, todos, preferences) into caveman format
   to save input tokens. Preserves all technical substance, code, URLs, and structure.
   Compressed version overwrites the original file. Human-readable backup saved as FILE.original.md.
-  Trigger: /caveman:compress <filepath> or "compress memory file"
+  Trigger: /caveman:compress <filepath> or "compress memory file". Explicit consent
+  required before running; this tool sends file content to a model provider and overwrites the file.
 ---
 
 # Caveman Compress
@@ -15,7 +16,17 @@ Compress natural language files (CLAUDE.md, todos, preferences) into caveman-spe
 
 ## Trigger
 
-`/caveman:compress <filepath>` or when user asks to compress a memory file.
+`/caveman:compress <filepath>` or when the user asks to compress a memory file.
+
+## Consent and scope
+
+Before running, confirm with the user: which file, and that they accept (a) the file content being sent to the model provider and (b) the overwrite-with-backup behavior. Keep the backup; never delete `FILE.original.md`.
+
+Compressed output replaces the original only after the validation passes and the user has seen the result summary. Lexical checks cannot prove meaning survived: permissions, negations, exceptions, and uncertainty in the source can change without detection. When the file controls agent behavior (permissions, security rules, approval flows), treat compression as risky; recommend leaving that file uncompressed unless the user insists.
+
+If the file has a counterpart in the dotfiles repository, remind the user to sync the change there too; this tool does not update mirrors itself.
+
+Do not run the compression during any other task's execution; it is a standalone, user-requested operation only.
 
 ## Process
 

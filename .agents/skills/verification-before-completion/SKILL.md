@@ -19,7 +19,7 @@ Claiming work is complete without verification is dishonesty, not efficiency.
 NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
 ```
 
-If you haven't run the verification command in this message, you cannot claim it passes.
+Evidence stays valid while its inputs stay unchanged. If code, config, or the relevant tests changed since the last run, re-run; otherwise a recent fresh run still counts. The command must have run in this session, not necessarily in this message.
 
 ## The Gate Function
 
@@ -60,6 +60,12 @@ Skip any step = lying, not verifying
 - Tired and wanting work over
 - **ANY wording implying success without having run verification**
 
+## Proportionality
+
+Match the check to the claim. A targeted test supports a claim about the changed path; it does not support a claim about the whole suite. State the boundary with the result ("the auth tests pass; the full suite was not run").
+
+Read-only review never requires mutating the worktree, reverting edits, or running project code that could have side effects. Static inspection plus stated limitations is valid evidence for read-only claims. Never revert a fix or run an unsafe script merely to satisfy a procedural rule; a mutation test belongs in an approved isolated environment.
+
 ## Rationalization Prevention
 
 | Excuse | Reality |
@@ -70,7 +76,7 @@ Skip any step = lying, not verifying
 | "Linter passed" | Linter ≠ compiler |
 | "Agent said success" | Verify independently |
 | "I'm tired" | Exhaustion ≠ excuse |
-| "Partial check is enough" | Partial proves nothing |
+| "Partial check is enough" | Prove the part you claim; scope the claim to the part you proved |
 | "Different words so rule doesn't apply" | Spirit over letter |
 
 ## Key Patterns
@@ -83,8 +89,9 @@ Skip any step = lying, not verifying
 
 **Regression tests (TDD Red-Green):**
 ```
-✅ Write → Run (pass) → Revert fix → Run (MUST FAIL) → Restore → Run (pass)
+✅ Write → Run (pass) → Revert fix → Run (MUST FAIL) → Restore → Run (pass) — in approved isolation, on your own change
 ❌ "I've written a regression test" (without red-green verification)
+❌ Reverting user work or uncommitted changes to manufacture a red state
 ```
 
 **Build:**
@@ -129,6 +136,10 @@ From 24 failure memories:
 - Paraphrases and synonyms
 - Implications of success
 - ANY communication suggesting completion/correctness
+
+**Scope limits:**
+- Evidence must match claim scope; qualify partial evidence instead of suppressing it
+- Never run unauthorized or unsafe project code, and never revert work, just to satisfy this rule
 
 ## The Bottom Line
 

@@ -1,11 +1,11 @@
 ---
 name: improve-codebase-architecture
-description: Find deepening opportunities in a codebase, informed by the domain language in CONTEXT.md and the decisions in docs/adr/. Use when the user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more testable and AI-navigable.
+description: Find architecture improvement candidates, with module deepening as the primary lens, informed by the domain language in CONTEXT.md and the decisions in docs/adr/. Use when the user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more testable and AI-navigable.
 ---
 
 # Improve Codebase Architecture
 
-Surface architectural friction and propose **deepening opportunities** — refactors that turn shallow modules into deep ones. The aim is testability and AI-navigability.
+Surface architectural friction and propose improvements. The primary lens is **deepening** — refactors that turn shallow modules into deep ones; the aim is testability and AI-navigability. Deepening is a hypothesis generator, not the only good answer: also weigh compatibility, security boundaries, deployment constraints, runtime behavior, and the option of keeping the current structure. If the existing structure is already adequate, say so and stop.
 
 ## Glossary
 
@@ -27,6 +27,8 @@ Key principles (see [LANGUAGE.md](LANGUAGE.md) for the full list):
 - **One adapter = hypothetical seam. Two adapters = real seam.**
 
 This skill is _informed_ by the project's domain model. The domain language gives names to good seams; ADRs record decisions the skill should not re-litigate.
+
+Not every problem is a deepening problem. When friction has a non-deepening fix (clearer ownership, a security boundary, fewer dependencies, documentation), present that too, with the same evidence standard.
 
 ## Process
 
@@ -73,9 +75,9 @@ Do NOT propose interfaces yet. After the file is written, ask the user: "Which o
 
 Once the user picks a candidate, drop into a grilling conversation. Walk the design tree with them — constraints, dependencies, the shape of the deepened module, what sits behind the seam, what tests survive.
 
-Side effects happen inline as decisions crystallize:
+Side effects are proposed inline as decisions crystallize, and written only with the user's explicit approval (grilling does not authorize repository writes):
 
-- **Naming a deepened module after a concept not in `CONTEXT.md`?** Add the term to `CONTEXT.md` — same discipline as `/grill-with-docs` (see [CONTEXT-FORMAT.md](../grill-with-docs/CONTEXT-FORMAT.md)). Create the file lazily if it doesn't exist.
-- **Sharpening a fuzzy term during the conversation?** Update `CONTEXT.md` right there.
+- **Naming a deepened module after a concept not in `CONTEXT.md`?** Propose the term for `CONTEXT.md` — same discipline as `/grill-with-docs` (see [CONTEXT-FORMAT.md](../grill-with-docs/CONTEXT-FORMAT.md)). Offer to create the file if it doesn't exist; write only on approval.
+- **Sharpening a fuzzy term during the conversation?** Propose the `CONTEXT.md` change; write on approval.
 - **User rejects the candidate with a load-bearing reason?** Offer an ADR, framed as: _"Want me to record this as an ADR so future architecture reviews don't re-suggest it?"_ Only offer when the reason would actually be needed by a future explorer to avoid re-suggesting the same thing — skip ephemeral reasons ("not worth it right now") and self-evident ones. See [ADR-FORMAT.md](../grill-with-docs/ADR-FORMAT.md).
-- **Want to explore alternative interfaces for the deepened module?** See [INTERFACE-DESIGN.md](INTERFACE-DESIGN.md).
+- **Want to explore alternative interfaces for the deepened module?** See [INTERFACE-DESIGN.md](INTERFACE-DESIGN.md). Make subagent-based exploration optional: if parallel subagent tools are unavailable, compare alternatives inline instead.

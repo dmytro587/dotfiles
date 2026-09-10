@@ -1,6 +1,6 @@
 ---
 name: grill-with-docs
-description: Grilling session that challenges your plan against the existing domain model, sharpens terminology, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallise. Use when user wants to stress-test a plan against their project's language and documented decisions.
+description: Grilling session that challenges your plan against the existing domain model and sharpens terminology. Use when user wants to stress-test a plan against their project's language and documented decisions. Documentation capture (CONTEXT.md, ADRs) is opt-in; the session is read-only by default.
 ---
 
 <what-to-do>
@@ -12,6 +12,8 @@ Ask the questions one at a time, waiting for feedback on each question before co
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
 </what-to-do>
+
+Ask at session start whether to capture resolved terms in `CONTEXT.md` and record ADRs. Default: no — propose changes as text instead.
 
 <supporting-info>
 
@@ -49,7 +51,7 @@ If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The ma
 │       └── docs/adr/
 ```
 
-Create files lazily — only when you have something to write. If no `CONTEXT.md` exists, create one when the first term is resolved. If no `docs/adr/` exists, create it when the first ADR is needed.
+Create files lazily — only when you have something to write AND the user has opted in to documentation capture. If no `CONTEXT.md` exists, offer to create one when the first term is resolved. If no `docs/adr/` exists, offer to create it when the first ADR is needed.
 
 ## During the session
 
@@ -69,9 +71,9 @@ When domain relationships are being discussed, stress-test them with specific sc
 
 When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
 
-### Update CONTEXT.md inline
+### Propose CONTEXT.md updates
 
-When a term is resolved, update `CONTEXT.md` right there. Don't batch these up — capture them as they happen. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
+When a term is resolved, propose the exact change: the term, its definition, and why. Write it to `CONTEXT.md` only if the user agreed to documentation capture at session start or approves it now. Don't batch proposals — offer them as they happen. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md). A grilling session alone does not authorize repository writes.
 
 `CONTEXT.md` should be totally devoid of implementation details. Do not treat `CONTEXT.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
 

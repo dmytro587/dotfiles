@@ -377,20 +377,11 @@ When: Reference material too large for inline
 NO SKILL WITHOUT A FAILING TEST FIRST
 ```
 
-This applies to NEW skills AND EDITS to existing skills.
+This applies to NEW skills AND EDITS to existing skills. The failing test is a documented baseline scenario showing the behavior gap; it does not require deleting anything.
 
-Write skill before testing? Delete it. Start over.
-Edit skill without testing? Same violation.
+Edit skill without testing? Run the baseline first. "Delete it. Start over" applies to work you created in this cycle, never to the user's existing files; revert your own untested edit, not user work.
 
-**No exceptions:**
-- Not for "simple additions"
-- Not for "just adding a section"
-- Not for "documentation updates"
-- Don't keep untested changes as "reference"
-- Don't "adapt" while running tests
-- Delete means delete
-
-**REQUIRED BACKGROUND:** The superpowers:test-driven-development skill explains why this matters. Same principles apply to documentation.
+**Scale tests to the change:** a wording fix needs one baseline check; a new discipline skill needs the full pressure suite. Documentation-only rewording with no behavioral claim may skip scenario testing, but state that choice.
 
 ## Testing All Skill Types
 
@@ -406,7 +397,12 @@ Different skill types need different test approaches:
 - Multiple pressures combined: time + sunk cost + exhaustion
 - Identify rationalizations and add explicit counters
 
-**Success criteria:** Agent follows rule under maximum pressure
+**Also test:**
+- **Nonactivation:** does the skill stay dormant on tasks outside its trigger? A broad description that fires everywhere is a defect.
+- **User-intent conflicts:** when the skill's rule and the user's explicit instruction collide, does the agent surface the conflict and follow the user?
+- **Read-only contexts:** does the skill demand mutations or commands it cannot have permission for?
+
+**Success criteria:** Agent follows the rule under pressure AND within the user's actual authority and intent; compliance that overrides the user is failure.
 
 ### Technique Skills (how-to guides)
 
@@ -629,8 +625,8 @@ Deploying untested skills = deploying untested code. It's a violation of quality
 - [ ] Supporting files only for tools or heavy reference
 
 **Deployment:**
-- [ ] Commit skill to git and push to your fork (if configured)
-- [ ] Consider contributing back via PR (if broadly useful)
+- [ ] Report results and let the user decide about committing or pushing; do not commit or push on your own authority as part of authoring
+- [ ] Consider contributing back via PR (if broadly useful), only if the user wants that
 
 ## Discovery Workflow
 

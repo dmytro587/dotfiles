@@ -433,7 +433,7 @@ These details often carry the writer's voice. Keep them unless they hurt the mea
 
 **Pasted text (default).** Return the draft, a short list of remaining AI patterns, and the final rewrite.
 
-**File mode.** When the user names a file, run the full rewrite process but write only the final text to the file. Change prose only. Keep code blocks, YAML metadata, data, and link targets unchanged. Then give the user a short summary.
+**File mode.** When the user names a file, first decide the task: review or rewrite. Review returns the draft, the pattern list, and the proposed rewrite as text; it does not touch the file. Write the file only when the user asked for the rewrite or an edit to that file. When writing: prose only; keep code blocks, YAML metadata, data, and link targets unchanged. Then give the user a short summary.
 
 **Embedded mode.** When another task uses this skill for a pull request, commit message, or document, return only the final text.
 

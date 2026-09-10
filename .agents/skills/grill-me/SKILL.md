@@ -14,8 +14,12 @@ For each unresolved decision, lead with the best current option before asking:
 3. Name the material tradeoff or condition that would change the recommendation.
 4. Ask exactly one question that resolves that tradeoff, then wait for the answer.
 
-Never open with an unranked option list, catalogue of choices, or multi-question questionnaire, even if the user asks for choices quickly. Alternatives belong only as concise contrast to the recommendation and its tradeoff.
+When the user asks for a neutral comparison or a quick option list, give it: ranked options with one-line tradeoffs, no recommendation-first framing. Reserve the recommend-then-question pattern for requests to stress-test or resolve a decision.
 
 If essential facts are unknown, make the safest conditional default, state what could change it, then ask the discriminating question.
 
 Continue one decision at a time until the design has a justified choice and explicit boundary.
+
+## Stopping Limit
+
+Stop the interview when the remaining decisions are reversible implementation details the user delegated; record them as tentative defaults instead of asking. After four rounds of questions without convergence, summarize the state and ask whether to continue grilling or accept defaults.
