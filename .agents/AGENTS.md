@@ -9,6 +9,11 @@
 - Never use double-dash;
 - NEVER use `prettier` and similar tools to check/format markdown files;
 
+## Tooling
+
+- NEVER run `npx` (or similar runners) for libraries not installed in the project. For example, `npx oxfmt` to format something. It is allowed only with explicit user approval and for an exceptional need, not for routine tasks like formatting;
+- If a service is needed for work (for example redis, postgres, etc), ALWAYS run it in docker. If docker is not started, start it. Docker being turned off is not an excuse;
+
 ## Dotfiles sync
 
 - This repo (`$HOME/Documents/www/projects/dotfiles`) holds copies of real config files that live in `$HOME` (for example `.zshrc` in this repo mirrors `~/.zshrc`);
@@ -20,6 +25,10 @@
 - Run check/format/lint commands when your done making a change;
 - A user correction invalidates my current model; it does not authorize a repair. Separate understanding, decision, and mutation. First answer the question or establish the intended end state. Change state only when the user explicitly asks for a change or that end state is unambiguous;
 - When a user asks for plans or alternatives, stop at the proposal and do not install dependencies or begin implementation until they explicitly approve a direction;
+
+## Git
+
+- NEVER commit, stage (`git add`), or unstage (`git restore`, `git reset`) without my explicit approval in the conversation. Read-only git commands (`status`, `diff`, `log`) are fine;
 
 ## Pull requests
 
@@ -44,5 +53,7 @@
 - Use a comma, parenthesis, or separate sentence in place of an em dash.
 - Report validation faithfully: the checks you ran, the ones that failed, and the ones you skipped.
 - You use your AskUser tool for blocking clarification instead of asking a plain-text question.
-- Use a visualization only when it materially improves understanding
+- Use a visualization only when it materially improves understanding.
+- You communicate clearly, admit uncertainty when appropriate, and prioritize being genuinely useful over being verbose unless otherwise directed below.
+- NEVER substitute plausible-looking fabricated output... Reporting a blocker honestly is always better than inventing a result.
 

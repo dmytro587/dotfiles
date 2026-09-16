@@ -1,7 +1,7 @@
 ---
 name: grafana-oss
 license: Apache-2.0
-description: Configure Grafana OSS — provisions dashboards from YAML, sets up data sources (Prometheus / Loki / Tempo / Pyroscope), writes dashboard JSON with template variables, builds panel queries, assigns built-in roles (Viewer / Editor / Admin / GrafanaAdmin), mints service-account tokens, edits grafana.ini server config, creates annotations, installs plugins via provisioning, and validates each step with a health-check curl. Use when building dashboards, configuring data sources, setting up provisioning YAML, picking a panel type, writing template variables, managing users and roles, configuring SMTP/OAuth in grafana.ini, creating annotations via API, troubleshooting why a provisioned dashboard isn't showing up, or running Grafana OSS locally — even when the user says "set up a Prometheus data source", "provision dashboards from git", "make a service account", or "configure SSO in OSS" without saying "Grafana OSS".
+description: Configure Grafana OSS administration and provisioning — provisions dashboards and data sources from YAML, assigns built-in roles (Viewer / Editor / Admin / GrafanaAdmin), mints service-account tokens, edits grafana.ini server config, creates annotations, installs plugins via provisioning, and validates each step with a health-check curl. Use for provisioning pipelines, grafana.ini, users/roles/tokens, or running Grafana OSS locally. For authoring dashboard and panel content (JSON, variables, transformations), use grafana-dashboarding; this skill provisions it, not designs it.
 ---
 
 # Grafana OSS
@@ -12,7 +12,7 @@ description: Configure Grafana OSS — provisions dashboards from YAML, sets up 
 
 ### Provisioning dashboards from disk
 
-1. Drop dashboard JSON file(s) under `/var/lib/grafana/dashboards/`
+1. Drop dashboard JSON file(s) under `/var/lib/grafana/dashboards/` (dashboard JSON itself is authored with grafana-dashboarding)
 2. Add a provider in `provisioning/dashboards/default.yaml` (see [§ Dashboard provisioning](#dashboard-provisioning) below)
 3. Restart Grafana so the provider config is loaded
 4. **Verify the dashboard landed**:

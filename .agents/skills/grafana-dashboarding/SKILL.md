@@ -15,7 +15,7 @@ description:
 
 Dashboards are JSON documents stored in Grafana. Every dashboard has panels, variables, time
 range, and refresh settings. Understanding the JSON schema lets you programmatically create and
-modify dashboards via the API or Grafana Assistant tools.
+modify dashboards via the API or Grafana Assistant tools. This skill owns dashboard/panel content. For provisioning pipelines, grafana.ini, users/roles/tokens, and data-source setup, use grafana-oss; it deploys what this skill designs.
 
 ---
 

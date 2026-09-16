@@ -14,8 +14,15 @@ Review code changes with a structured lens on security, performance, correctness
 /code-review <PR URL or file path, or nothing> 
 ```
 
-Review the provided code changes: @$1, if nothing provided then find the
-related PR to current branch and look at the diff via `gh diff`
+Review the provided code changes. If nothing is provided, find the PR for the current branch and review its diff via `gh pr diff`.
+
+## Scope First
+
+Before reviewing, establish and state the review scope: the exact diff range, plus whether staged, unstaged, and untracked files are included. A default PR review covers the PR's committed diff only; say so when uncommitted work exists and is excluded. Never guess the scope; ask when the user's target is ambiguous ("review my changes" with a dirty worktree = ask which parts).
+
+## Role
+
+This skill is the generic review coordinator. Specialist lenses (standards/spec via the `review` skill, PostgreSQL, etc) may contribute findings, but they do not replace this scope-first contract. Default to no mutation and no posting: report findings; do not fix or comment remotely unless asked.
 
 ## How It Works
 

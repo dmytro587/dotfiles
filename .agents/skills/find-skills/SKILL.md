@@ -1,6 +1,6 @@
 ---
 name: find-skills
-description: Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill that can...", or express interest in extending capabilities. This skill should be used when the user is looking for functionality that might exist as an installable skill.
+description: Discover and install agent skills when the user explicitly asks to find, search for, or install a skill, or when a needed capability is genuinely missing from the current set. Do NOT use for ordinary "how do I do X?" questions; answer those directly with existing capabilities first.
 ---
 
 # Find Skills
@@ -9,14 +9,18 @@ This skill helps you discover and install skills from the open agent skills ecos
 
 ## When to Use This Skill
 
-Use this skill when the user:
+Use this skill ONLY when:
 
-- Asks "how do I do X" where X might be a common task with an existing skill
-- Says "find a skill for X" or "is there a skill for X"
-- Asks "can you do X" where X is a specialized capability
-- Expresses interest in extending agent capabilities
-- Wants to search for tools, templates, or workflows
-- Mentions they wish they had help with a specific domain (design, testing, deployment, etc.)
+- The user explicitly asks to find, search, or install a skill ("find a skill for X", "is there a skill for X", "install a skill that...").
+- A needed capability is genuinely missing and existing tools cannot do the task.
+
+Do NOT use this skill for ordinary requests ("how do I make my React app faster?", "review this PR") — attempt the task with existing capabilities first. Discovery is not the answer to a normal task request.
+
+Do not activate on:
+
+- "How do I do X?" where X is any common task
+- Requests the current skill set already covers
+- Casual mentions of a domain (design, testing, deployment) without a capability gap
 
 ## What is the Skills CLI?
 
@@ -95,13 +99,13 @@ Learn more: https://skills.sh/vercel-labs/agent-skills/react-best-practices
 
 ### Step 6: Offer to Install
 
-If the user wants to proceed, you can install the skill for them:
+Install only when the user, after seeing the options, explicitly approves installing that specific skill. Installing to the user level requires that explicit approval; an interest in search is not install approval. Before recommending, weigh source trust (who publishes it, what the code does) separately from popularity; install counts measure adoption, not safety.
 
 ```bash
 npx skills add <owner/repo@skill> -g -y
 ```
 
-The `-g` flag installs globally (user-level) and `-y` skips confirmation prompts.
+The `-g` flag installs globally (user-level) and `-y` skips confirmation prompts. Use `-y` only after the user approved the install.
 
 ## Common Skill Categories
 
