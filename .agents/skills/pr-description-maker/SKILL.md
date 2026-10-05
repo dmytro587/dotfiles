@@ -32,45 +32,57 @@ If the source of changes is not explicit, stop and ask the user to choose one sc
 Use exactly the scope the user picked; do not mix scopes or silently fall back to another one. When the scope includes local changes, also enumerate untracked files and ask whether they belong in the description.
 
 1. Remote branch against the base branch:
- `gh pr view`
- `gh pr diff`
+`gh pr view`
+`gh pr diff`
 2. Remote branch plus local changes against the base branch:
- `gh pr view`
- `gh pr diff`
- `git diff --staged`
- `git diff`
+`gh pr view`
+`gh pr diff`
+`git diff --staged`
+`git diff`
 3. Only local diff:
- `git diff --staged`
- `git diff`
+`git diff --staged`
+`git diff`
 
 If you need structured data for the description, add `--json` to `gh pr view` and filter with `--jq`.
 
 ## Recommended Structure
 
+The slashes in the section names means to choice something from it. 
+
 ```md
-<"Issue" or "Fix" or "Implement">: <number of resolved issue/part of the issue/comment>
+["Issue" or "Fix" or "Implement"]: number of resolved issue/part of the issue/comment
 
-## Summary
-<One sentence explaining what this PR does and why it matters>
+## Background/Problem
+Describe the background/Motivation/Issue what is fixed/Etc
 
-## How it works
-```mermaid
+## Summary/Solution
+One sentence explaining what this PR does and why it matters. ELI5
+
+## How it works/Flow
+It's optional section if the PR is small, and everything is clear and enough from the first one/two sections, 
+there is no need to bloat - the goal of PR description is to introduce reviewer and any future reader with the PR 
+and it's indent, not just bloat description without reason
+
 sequenceDiagram
   participant Source as Accurate source label
   participant System as Runtime component
   Source->>System: Accurate interaction label
-```
+
+## Other changes
+Optional section. Add only is something was done out of current task context.
+For example made some refactor along with the task, etc.
 
 ## Testing
-<Optional: add only if reviewers can use this section to verify changed behavior. State the behavior, then copy-pasteable commands or steps and their result. Omit the entire section for syntax checks, formatting checks, `git diff --check`, or unresolved failures that should be fixed before merge.>
+Optional: add only if reviewers can use this section to verify changed behavior. State the behavior, then copy-pasteable commands or steps and their result. Omit the entire section for syntax checks, formatting checks, `git diff --check`, or unresolved failures that should be fixed before merge.
 
 ## Manual migrations
-<This section is optional and should be added only when infra changes require manual follow-up>
-<Write this as a todo list. Each item must start with `- [ ]` and a verb, e.g. `- [ ] Create monitoring InstanceGroup for Production`.>
+This section is optional and should be added only when infra changes require manual follow-up
+Write this as a todo list. Each item must start with `- [ ]` and a verb, e.g. `- [ ] Create monitoring InstanceGroup for Production`.
 
 ## Notes
-- <Deployment scope or rollout note>
-- <Known deferred work, without internal phase labels>
+- Optional section. Add only when you have what to add here.
+- Deployment scope or rollout note
+- Known deferred work, without internal phase labels
 ```
 
 ## Writing Guidance
@@ -85,3 +97,4 @@ sequenceDiagram
 - A failed check caused by this PR means the PR is not ready: fix it, do not describe it as a known issue. Disclose material verification limits in the body (for example, "full suite not run; auth tests pass") instead of omitting them when they affect reviewer judgment. Mention an unrelated validation failure only when it materially affects reviewer verification, and include the command, failure, and why it is unrelated.
 - Omit `## Testing` rather than filling it with `bash -n`, `git diff --check`, formatting, or similar hygiene output. These can support local confidence, but they do not tell reviewers how the change works or what to verify.
 - If a diagram is included, keep it at the level of actual runtime behavior. Do not add speculative or future components.
+

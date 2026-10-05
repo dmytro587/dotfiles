@@ -5,7 +5,9 @@ description: Use when completing tasks, implementing major features, or before m
 
 # Requesting Code Review
 
-Dispatch a code-reviewer subagent (superpowers:code-reviewer type) to catch issues before they cascade. The reviewer gets precisely crafted context for evaluation — never your session's history. This keeps the reviewer focused on the work product, not your thought process, and preserves your own context for continued work. If the superpowers:code-reviewer agent type is unavailable, report that and use the nearest supported reviewer dispatch instead of silently reviewing in-session.
+Dispatch a code review subagent to catch issues before they cascade. The reviewer gets precisely crafted context for evaluation — never your session's history. This keeps the reviewer focused on the work product, not your thought process, and preserves your own context for continued work.
+
+Use the host's native reviewer agent type when it exists (names vary by harness: `reviewer`, `code-reviewer`, and similar). If a named specialist type is unavailable, dispatch ONE general-purpose agent with a review-only contract. Do NOT improvise a fan-out of multiple agents for one review; a missing specialist type is never a reason to spawn several generic agents.
 
 **Core principle:** Review early, review often.
 
@@ -31,9 +33,9 @@ HEAD_SHA=$(git rev-parse HEAD)
 ```
 Uncommitted work is invisible to a SHA-range diff. If the reviewed work includes uncommitted changes, tell the reviewer explicitly (list the files or pass `git diff` output in the prompt) instead of letting the range silently exclude them.
 
-**2. Dispatch code-reviewer subagent:**
+**2. Dispatch the review subagent:**
 
-Use Task tool with superpowers:code-reviewer type, fill template at `code-reviewer.md`
+Use the Task tool with the host's native reviewer agent type if it has one; fill template at `code-reviewer.md`. Otherwise dispatch one general-purpose agent with a review-only contract. If no subagent dispatch is available at all, report that and review in-session rather than fanning out multiple agents.
 
 **Placeholders:**
 - `{WHAT_WAS_IMPLEMENTED}` - What you just built
@@ -58,9 +60,9 @@ You: Let me request code review before proceeding.
 BASE_SHA=$(git log --oneline | grep "Task 1" | head -1 | awk '{print $1}')
 HEAD_SHA=$(git rev-parse HEAD)
 
-[Dispatch superpowers:code-reviewer subagent]
+[Dispatch reviewer subagent (host's native reviewer type, or one general-purpose agent with review-only contract)]
   WHAT_WAS_IMPLEMENTED: Verification and repair functions for conversation index
-  PLAN_OR_REQUIREMENTS: Task 2 from docs/superpowers/plans/deployment-plan.md
+  PLAN_OR_REQUIREMENTS: Task 2 from docs/plans/deployment-plan.md
   BASE_SHA: a7981ec
   HEAD_SHA: 3df7661
   DESCRIPTION: Added verifyIndex() and repairIndex() with 4 issue types

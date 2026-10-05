@@ -1,0 +1,38 @@
+{
+  "settings": {
+    "branchPrefix": "none",
+    "branchPrefixCustom": "",
+    "autoRenameBranchFromWork": true,
+    "sourceControlAi": {
+      "enabled": true,
+      "actions": {
+        "branchName": {
+          "commandInputTemplate": "{basePrompt}",
+          "agentId": "pi",
+          "agentArgs": "--model openai-codex/gpt-5.6-luna:low"
+        },
+        "pullRequest": {
+          "commandInputTemplate": "- NEVER commit, stage or push anything! Your goal is ONLY create a pull request - doesn't matter does this branch has some pushed stuff or no, it's not your care.\n\n{basePrompt}",
+          "agentId": "pi",
+          "agentArgs": "--model openai-codex/gpt-5.6-luna:medium"
+        },
+        "commitMessage": {
+          "commandInputTemplate": "{basePrompt}\n\nPick the type by the PURPOSE of the change, not by file extension:\n - feat(resource): describe feature — adds new capability\n - chore(resource): describe update — updates config, tooling, environment, agent instructions, or\n   maintenance files\n - fix(resource): describe fix — fixes a bug, error, or broken behavior\n - tests(resource): describe test — adds or modifies tests\n - refactor(resource): describe refactor — restructures code without behavior change\n - docs(resource): describe docs — ONLY human-facing documentation (README, docs/ directories, CHANGELOG).\n   Never use docs for markdown files that configure or instruct an agent or tool (skills, prompts,\n   CLAUDE.md, AGENTS.md, .omp/, .pi/ config): those are chore (update) or feat (new capability),\n   regardless of extension.\n\nFor example: `tests(organization): Cover the member invitation with tests`\n\n Rules:\n - If the staged diff mixes unrelated changes, the subject must describe only the dominant change; list\n   the rest in the body without implying they belong to the subject's type. If the changes are clearly\n   separable, suggest splitting into separate commits instead of forcing one type.\n - resource is the area or file domain touched (e.g. skills, mcp, zshrc, kms).\n - Subject: imperative, short, no double-dash, no trailing period.",
+          "agentId": "pi",
+          "agentArgs": "--model openai-codex/gpt-5.6-luna:low"
+        }
+      },
+      "prCreationDefaults": {
+        "draft": false,
+        "useTemplate": false,
+        "generateDetailsOnOpen": false,
+        "openAfterCreate": false
+      }
+    },
+    "commitMessageAi": {
+      "enabled": true,
+      "agentId": "pi",
+      "customPrompt": "Pick the type by the PURPOSE of the change, not by file extension:\n - feat(resource): describe feature — adds new capability\n - chore(resource): describe update — updates config, tooling, environment, agent instructions, or\n   maintenance files\n - fix(resource): describe fix — fixes a bug, error, or broken behavior\n - tests(resource): describe test — adds or modifies tests\n - refactor(resource): describe refactor — restructures code without behavior change\n - docs(resource): describe docs — ONLY human-facing documentation (README, docs/ directories, CHANGELOG).\n   Never use docs for markdown files that configure or instruct an agent or tool (skills, prompts,\n   CLAUDE.md, AGENTS.md, .omp/, .pi/ config): those are chore (update) or feat (new capability),\n   regardless of extension.\n\nFor example: `tests(organization): Cover the member invitation with tests`\n\n Rules:\n - If the staged diff mixes unrelated changes, the subject must describe only the dominant change; list\n   the rest in the body without implying they belong to the subject's type. If the changes are clearly\n   separable, suggest splitting into separate commits instead of forcing one type.\n - resource is the area or file domain touched (e.g. skills, mcp, zshrc, kms).\n - Subject: imperative, short, no double-dash, no trailing period."
+    }
+  }
+}

@@ -34,6 +34,10 @@ This will:
 - Install Oh My Zsh
 - Copy dotfiles to your home directory
 
+## Orca Configuration
+
+`.orca/` keeps Orca keybindings and global source-control instructions for branch names, pull requests, and commit messages. `bootstrap.sh` installs them through `bootstrap_agents.sh`. Orca must have been launched once and then quit before changed profile settings can be restored. See `.orca/README.md` for a focused install command and details.
+
 ## SSH Key Setup
 
 The repository includes an `ssh.sh` script to easily set up SSH keys for GitHub:

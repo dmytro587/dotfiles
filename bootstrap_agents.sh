@@ -32,12 +32,12 @@ fi
 # A skill whose repo directory has no SKILL.md but has DISABLED_SKILL.md is
 # disabled: the home copy must not gain a SKILL.md, and an existing home
 # SKILL.md is removed so a locally disabled skill stays disabled after sync.
-for agent_dir in .agents .claude .omp .pi .factory; do
+for agent_dir in .agents .claude .omp .pi .factory .orca; do
   if [ ! -d "./$agent_dir" ]; then
     continue
   fi
   mkdir -p "$HOME/$agent_dir"
-  if [ "$agent_dir" = .omp ]; then
+  if [ "$agent_dir" = .omp ] || [ "$agent_dir" = .orca ]; then
     rsync -a --exclude=_bootstrap "./$agent_dir/" "$HOME/$agent_dir/"
   elif [ "$agent_dir" = .agents ]; then
     rsync -a --exclude=AGENTS.md "./$agent_dir/" "$HOME/$agent_dir/"
@@ -60,6 +60,9 @@ echo "Installing local OMP plugins"
 bash ./.omp/_bootstrap/install.sh
 
 bash ./.pi/install_pi_permission_gate.sh
+
+echo "Restoring Orca source-control settings"
+node ./.orca/_bootstrap/install.js
 
 # Link shared instructions to the repository source of truth.
 ln -sfn "$(pwd)/.agents/AGENTS.md" "$HOME/.agents/AGENTS.md"

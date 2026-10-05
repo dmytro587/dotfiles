@@ -38,7 +38,7 @@ shopt -s nullglob
 for dotfile in .[!.]*; do
   # Agent setup owns these directories; subagent artifacts stay in the repository.
   case "$dotfile" in
-    .agents|.claude|.omp|.pi) continue ;;
+    .agents|.claude|.omp|.pi|.orca) continue ;;
   esac
   cp -R "$dotfile" "$HOME/"
 done

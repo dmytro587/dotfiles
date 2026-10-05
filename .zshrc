@@ -3,6 +3,7 @@
 
 export PATH=$PATH:$HOME/go/bin
 export PATH=$PATH:/opt/homebrew/bin
+export PATH=$PATH:$HOME/.bun/bin
 
 # Path to your Oh My Zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
