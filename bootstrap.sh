@@ -7,7 +7,7 @@
 # 3. Install Oh My Zsh and the zsh-autosuggestions plugin
 # 4. Copy dotfiles to home directory
 # 5. Create project and screenshot folders
-# 6. Install Node.js LTS with nvm and Yarn
+# 6. Install the latest Node.js with nvm, Yarn, and the latest Go
 # 7. Install Google Cloud CLI if not already installed
 # 8. Set up coding agents (see bootstrap_agents.sh)
 #
@@ -60,11 +60,12 @@ install_dmg_app() {
   rm -rf "$tmp"
 }
 
-docker_arch=arm64
+# Docker and Go use the same names for the two Mac CPU types
+mac_arch=arm64
 if [ "$(uname -m)" = "x86_64" ]; then
-  docker_arch=amd64
+  mac_arch=amd64
 fi
-install_dmg_app Docker.app "https://desktop.docker.com/mac/main/$docker_arch/Docker.dmg"
+install_dmg_app Docker.app "https://desktop.docker.com/mac/main/$mac_arch/Docker.dmg"
 install_dmg_app Telegram.app https://telegram.org/dl/macos
 install_dmg_app Steam.app https://cdn.fastly.steamstatic.com/client/installer/steam.dmg
 install_dmg_app Arc.app https://releases.arc.net/release/Arc-latest.dmg
@@ -144,19 +145,32 @@ mkdir -p "$HOME/Documents/www/projects" "$HOME/Documents/media/screenshots"
 defaults write com.apple.screencapture location "$HOME/Documents/media/screenshots"
 killall SystemUIServer || true
 
-# Install Node.js LTS through nvm. Yarn and the agent steps need node.
+# Install the latest Node.js through nvm. Yarn and the agent steps need node.
+# "node" is the nvm name for the newest release, not the LTS line.
 export NVM_DIR="$HOME/.nvm"
 mkdir -p "$NVM_DIR"
 . "$(brew --prefix nvm)/nvm.sh"
 if ! command -v node &> /dev/null; then
-  echo "Installing Node.js LTS"
-  nvm install --lts
+  echo "Installing the latest Node.js"
+  nvm install node
 fi
 
 # Install yarn if not installed
 if ! command -v yarn &> /dev/null; then
   echo "Installing Yarn"
   npm install --global yarn
+fi
+
+# Install the latest Go with the official installer from go.dev. It installs
+# to /usr/local/go, and .zshrc adds /usr/local/go/bin to PATH. The go.dev
+# release list puts the newest stable release first.
+if ! command -v go &> /dev/null && [ ! -x /usr/local/go/bin/go ]; then
+  go_pkg="$(curl -fsSL 'https://go.dev/dl/?mode=json' | jq -r --arg arch "$mac_arch" '.[0].files[] | select(.os == "darwin" and .arch == $arch and .kind == "installer") | .filename')"
+  echo "Installing $go_pkg"
+  go_tmp="$(mktemp -d)"
+  curl -fsSL -o "$go_tmp/go.pkg" "https://go.dev/dl/$go_pkg"
+  sudo installer -pkg "$go_tmp/go.pkg" -target /
+  rm -rf "$go_tmp"
 fi
 
 # Install Google Cloud CLI

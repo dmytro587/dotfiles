@@ -5,7 +5,6 @@ Personal dotfiles and synchronization guides for macOS environment setup
 ## TODO
 - [ ] Implement custom apps downloading instead of using Homebrew Cask
 - [ ] Integrate Mac App Store applications into Brewfile using `mas` CLI
-- [ ] Install `go`
 
 ## Features
 
@@ -44,7 +43,7 @@ This will:
 - Install Oh My Zsh and the zsh-autosuggestions plugin
 - Copy dotfiles to your home directory
 - Create the project and screenshot folders
-- Install Node.js LTS with nvm and Yarn
+- Install the latest Node.js with nvm, Yarn, and the latest Go (official go.dev installer)
 - Set up coding agents (see `bootstrap_agents.sh`)
 
 If an agent step fails, the bootstrap prints a summary at the end. Fix that step, then run `./bootstrap_agents.sh` again.
