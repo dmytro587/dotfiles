@@ -1,9 +1,12 @@
-tap "derailed/k9s"
-tap "ngrok/ngrok"
-tap "smudge/smudge"
-tap "stablyai/orca"
-tap "hashicorp/tap"
-tap "jesseduffield/lazydocker"
+# Each tap belongs to the project's own owner, and the project docs name it.
+# Homebrew 7 loads nothing from a non-official tap unless it is trusted, so
+# trust only the one formula or cask that this file installs from each tap.
+tap "derailed/k9s", trusted: { formulae: ["k9s"] }
+tap "ngrok/ngrok", trusted: { casks: ["ngrok"] }
+tap "smudge/smudge", trusted: { formulae: ["nightlight"] }
+tap "stablyai/orca", trusted: { casks: ["orca"] }
+tap "hashicorp/tap", trusted: { formulae: ["terraform"] }
+tap "jesseduffield/lazydocker", trusted: { formulae: ["lazydocker"] }
 
 brew "awscli"
 # 99designs/aws-vault README names this formula. It builds the maintained ByteNess fork.
