@@ -20,7 +20,7 @@ Assume baseline shell knowledge. Keep this skill focused on boundaries that comm
 
 ## Scripting Techniques
 
-- Implement comprehensive argument parsing with `getopts` and usage functions.
+- Parse CLI flags with **full names only** (`--dry-run`, `--help`, `--output path`). Do **not** use `getopts` or single-letter options (`-h`, `-f`). Use a `while [[ $# -gt 0 ]]` loop and `case "$1" in` (or equivalent explicit matching); Document every flag in a `usage` function on stderr.
 - Create temporary files and directories safely with `mktemp` and cleanup traps.
 - Design scripts to be idempotent and support dry-run modes.
 - Validate inputs with `: "${VAR:?message}"` for required environment variables.

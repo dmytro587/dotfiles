@@ -124,7 +124,7 @@ export PATH=/bin:/usr/bin:/usr/local/bin:/sbin:${PATH}
 
 export NVM_DIR="$HOME/.nvm"
 # This loads nvm
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
 # This loads nvm bash_completion
 # [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
 

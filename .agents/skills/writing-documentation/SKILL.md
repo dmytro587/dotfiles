@@ -7,6 +7,19 @@ description: Use when writing, updating, or reviewing README files or other Mark
 
 Organize documentation from overview to detail. Each document should answer questions at its own level and link to the documents that own deeper details.
 
+## Give the reader a clear mental model
+
+At the start of each document (and again when the narrative shifts), give the reader an explicit frame. Compress for trivial pages; do not skip it for multi-part guides or when earlier sections assumed unstated context.
+
+- **Today**: facts on the ground now (current behavior, what already exists, scope in play);
+- **Wanted**: the reader's goal or success criteria;
+- **Chosen**: the approach, option, or tradeoff the document adopts (mark it provisional if not settled);
+- **Remaining**: what is left (next steps, open questions, risks).
+
+Connect the problem and the proposed solution first. Findings are supporting material, not the reader's starting point.
+
+Make detail optional. Put source findings, implementation details, alternatives, and validation behind closed toggles (for example HTML `<details>` / `<summary>` where the renderer supports them). Use section breaks to separate ideas.
+
 ## Zoom Out First
 
 Before changing a document:
@@ -24,6 +37,8 @@ Use the existing documentation structure unless it prevents readers from finding
 - **Topic document:** Own the detailed instructions, explanation, or reference for its subject. Make it discoverable from the relevant README.
 
 Higher-level documents summarize and point downward. Lower-level documents explain their own scope, not the entire project.
+
+Include only the detail readers need at the document’s current level in the hierarchy. Move deeper instructions, implementation details, and exhaustive reference material to the document that owns them, and link to it. A collapsible section does not make out-of-scope detail appropriate.
 
 Keep shared information at the nearest level that covers all affected modules. Keep module-specific details with the module.
 
@@ -54,8 +69,10 @@ When moving information, update its links and remove obsolete copies. Do not cre
 
 Check that:
 
+- The opening gives Today, Wanted, Chosen, and Remaining where scope warrants it; problem and solution come before buried findings.
+- Optional detail (findings, alternatives, validation) is collapsible or clearly secondary, not required to understand the main path.
 - Readers can move from the entry-point README to the details they need.
-- Each document contains information appropriate to its scope.
+- Each document contains only the detail needed at its hierarchy level, with links to deeper material instead of extra detail.
 - Detailed information has one clear owner.
 - Links resolve from the document’s actual location, including its published or deployed form when applicable.
 - Paths, commands, examples, and claims are current.

@@ -1,9 +1,26 @@
 ---
 name: show-me
-description: Help the user understand the current topic visually with concise diagrams, code-shape sketches, and focused HTML artifacts.
+description: Use when the user needs a concise diagram, code-shape sketch, or focused HTML artifact to understand one current claim.
 ---
 
 Help the user understand the current topic of conversation visually. Skip the preamble and keep prose brief. Pick the smallest view that makes the key point clear.
+
+A visual is evidence-shaped communication, not a collage. One visual supports one claim. If the answer has several claims, split them into separate visuals or keep the extra claims in prose.
+
+Before drawing, state the claim and classify elements as **observed**, **inferred**, **proposed**, **unresolved**, or **residual risk** when those statuses differ. Show ownership boundaries explicitly; do not let color, proximity, or an unlabeled arrow imply proof.
+
+If the user requires one visual and no prose for multiple claims, honor that format by making the figure's single meta-claim explicit inside it. Partition the content, place the claim and status labels inside the figure, and mark every cross-status relation as `inference`, `hypothesis`, or `[NOT ESTABLISHED]`. Treat fixes as **proposed** unless implementation evidence exists. Never use proof-like arrows from observed content to inferred or proposed content.
+
+Render proposed fixes with an explicit `NOT IMPLEMENTED` label and non-assertive or dashed styling so the figure cannot make a proposal look shipped.
+
+Example:
+
+```text
+Claim: retry re-enters the write path.
+request --retry--> write
+```
+
+The arrow shows the claimed path only. Put the log line that proves the retry beside it, and keep a proposed idempotency change outside this figure.
 
 - Show logic or an algorithm as pseudocode:
 

@@ -1,16 +1,12 @@
 ---
 name: orca-cli
 description: >-
-  Use the public `orca` CLI to operate Orca-managed worktrees, folder contexts,
-  terminals, repos, automations, worktree comments, and the browser embedded
-  inside the Orca app. Use when the user says "$orca-cli", "use orca cli",
-  "Orca worktree", "child worktree", "cardStatus", "spawn codex/claude in a worktree",
-  "read/wait/send Orca terminal", "terminal send", "full handoff", "handover",
-  "give this to another agent", "another worktree", "Orca browser", or
-  "control the browser inside Orca". Prefer this over raw `git worktree`, ad hoc
-  PTYs, Playwright, or Computer Use when the task touches Orca-managed state.
-  Use Computer Use for browser windows, webviews, or desktop UI outside Orca's
-  embedded browser.
+  Use only when the user explicitly mentions Orca or "$orca-cli" and requests
+  work with Orca-managed worktrees, folder contexts, terminals, repos,
+  automations, worktree comments, or the embedded browser. Do not trigger for
+  generic requests such as "spawn sub-agents", "spawn codex/claude in a worktree",
+  "child worktree", "terminal send", or "hand this off" without an explicit
+  Orca mention.
 ---
 
 # Orca CLI
@@ -19,12 +15,18 @@ This file is a discovery stub, not the usage guide. The full, version-matched Or
 reference is served by the `orca` binary itself — kept out of this file on purpose so it
 can never drift from the binary that will actually run your commands.
 
-Engage Orca whenever its running editor/runtime is the source of truth: Orca-managed
-worktrees, folder contexts, terminals, repos, automations, worktree comments, and the
-browser embedded inside the Orca app. Triggers include "$orca-cli", "Orca worktree",
-"child worktree", "spawn codex/claude in a worktree", "read/wait/send Orca terminal",
-"full handoff" / "handover" / "give this to another agent", and "control the browser
-inside Orca". Use plain shell tools when Orca state does not matter.
+Engage this skill only when the user explicitly mentions Orca or "$orca-cli" and
+the requested task touches Orca-managed state. Running inside Orca does not by
+itself satisfy this requirement.
+
+Generic requests such as "spawn sub-agents", "spawn codex/claude in a worktree",
+"child worktree", "terminal send", "full handoff", "handover", or "give this to
+another agent" do not trigger this skill without an explicit Orca mention. Use
+the normal sub-agent, shell, or handoff path instead.
+
+For explicit Orca tasks, prefer this skill over raw `git worktree`, ad hoc PTYs,
+Playwright, or Computer Use. Use Computer Use for browser windows, webviews, or
+desktop UI outside Orca's embedded browser.
 
 ## Resolve the CLI for this session
 

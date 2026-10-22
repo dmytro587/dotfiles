@@ -1,6 +1,6 @@
 ---
 name: verification-before-completion
-description: Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims; evidence before assertions always
+description: Use when about to claim work is complete, fixed, or passing, before committing or creating PRs. Confirm evidence that is inside the user request before a success claim. This skill does not add commands, checks, or a return to earlier work.
 ---
 
 # Verification Before Completion
@@ -13,10 +13,22 @@ Claiming work is complete without verification is dishonesty, not efficiency.
 
 **Violating the letter of this rule is violating the spirit of this rule.**
 
+## Scope comes first
+
+This section overrides the iron law, the gate, and “when to apply.”
+
+Verification confirms a claim. It does not add work.
+
+- The user request is the scope. A skill, a task list, or a reminder to continue does not add commands, checks, or a return to earlier work.
+- A question, a review, or a correction is not permission to run commands or resume an earlier task.
+- Run a command only when it is inside the request. Do not run one because this skill demands evidence.
+- Do not widen one check into related commands, repeats, or parallel or background work. One long-running command at a time.
+- If the request does not include a run, inspect the result and stop. Say what was not run. Do not run it to satisfy this skill.
+
 ## The Iron Law
 
 ```
-NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
+NO IN-SCOPE COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
 ```
 
 Evidence stays valid while its inputs stay unchanged. If code, config, or the relevant tests changed since the last run, re-run; otherwise a recent fresh run still counts. The command must have run in this session, not necessarily in this message.
@@ -26,8 +38,8 @@ Evidence stays valid while its inputs stay unchanged. If code, config, or the re
 ```
 BEFORE claiming any status or expressing satisfaction:
 
-1. IDENTIFY: What command proves this claim?
-2. RUN: Execute the FULL command (fresh, complete)
+1. IDENTIFY: What command inside the request proves this claim? If the request includes none, inspect the result and stop.
+2. RUN: Execute that command only (fresh, complete). Do not add related commands.
 3. READ: Full output, check exit code, count failures
 4. VERIFY: Does output confirm the claim?
    - If NO: State actual status with evidence
@@ -77,6 +89,7 @@ Read-only review never requires mutating the worktree, reverting edits, or runni
 | "Agent said success" | Verify independently |
 | "I'm tired" | Exhaustion ≠ excuse |
 | "Partial check is enough" | Prove the part you claim; scope the claim to the part you proved |
+| "The skill says verify" | Run only what the request includes. Do not add work |
 | "Different words so rule doesn't apply" | Spirit over letter |
 
 ## Key Patterns
@@ -123,13 +136,14 @@ From 24 failure memories:
 
 ## When To Apply
 
-**ALWAYS before:**
-- ANY variation of success/completion claims
-- ANY expression of satisfaction
-- ANY positive statement about work state
-- Committing, PR creation, task completion
-- Moving to next task
-- Delegating to agents
+**Before an in-scope completion claim:**
+- A success claim about work the user asked you to change or run
+- Committing, PR creation, or handing that work off
+
+**Do not use this skill to:**
+- Answer a question by running commands
+- Resume earlier work after the user says to stop, or says to answer only
+- Start extra, parallel, or background commands
 
 **Rule applies to:**
 - Exact phrases
@@ -143,8 +157,6 @@ From 24 failure memories:
 
 ## The Bottom Line
 
-**No shortcuts for verification.**
+**No shortcuts for an in-scope check. No extra checks to satisfy this skill.**
 
-Run the command. Read the output. THEN claim the result.
-
-This is non-negotiable.
+If the request includes a run, run that command, read the output, then claim the result. If it does not, inspect the result and stop.
