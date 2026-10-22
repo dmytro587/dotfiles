@@ -8,7 +8,7 @@
 #
 # omp plugin link is idempotent, so re-runs are safe.
 set -u
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
 for tool in jq omp; do
   command -v "$tool" >/dev/null 2>&1 || { echo "error: $tool is required" >&2; exit 1; }

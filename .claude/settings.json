@@ -1,0 +1,47 @@
+{
+  "model": "opus",
+  "effortLevel": "medium",
+  "theme": "auto",
+  "alwaysThinkingEnabled": false,
+  "enabledPlugins": {
+    "feature-dev@claude-code-plugins": true,
+    "explanatory-output-style@claude-code-plugins": true,
+    "learning-output-style@claude-code-plugins": true,
+    "ralph-wiggum@claude-code-plugins": true,
+    "security-guidance@claude-code-plugins": true,
+    "frontend-design@claude-code-plugins": true,
+    "superpowers@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      }
+    },
+    "claude-code-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-code"
+      }
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.local/bin/dcg"
+          },
+          {
+            "type": "command",
+            "command": "rtk hook claude"
+          }
+        ]
+      }
+    ]
+  }
+}

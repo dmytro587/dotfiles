@@ -4,7 +4,7 @@
 # Run from bootstrap.sh or directly after reviewing this repository.
 set -euo pipefail
 
-repo_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+repo_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 source_agent_dir="$repo_dir/agent"
 agent_dir="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
 security_dir="$agent_dir/security"
@@ -32,6 +32,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const [settingsPath, extensionPath] = process.argv.slice(2);
+// Pi packages this setup needs. Other packages in settings.json are kept.
+const requiredPackages = ["npm:pi-web-access", "npm:@ff-labs/pi-fff", "npm:pi-subagents", "npm:@juicesharp/rpiv-todo"];
 let settings = {};
 try {
   settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
@@ -49,6 +51,14 @@ if (settings.extensions !== undefined && !Array.isArray(settings.extensions)) {
 const extensions = Array.isArray(settings.extensions) ? settings.extensions.filter((entry) => entry !== extensionPath) : [];
 extensions.push(extensionPath); // configured paths load after discovered extensions
 settings.extensions = extensions;
+if (settings.packages !== undefined && !Array.isArray(settings.packages)) {
+  throw new Error(`Refusing to overwrite non-array packages in ${settingsPath}`);
+}
+const packages = Array.isArray(settings.packages) ? settings.packages : [];
+for (const pkg of requiredPackages) {
+  if (!packages.includes(pkg)) packages.push(pkg);
+}
+settings.packages = packages;
 const temporaryPath = `${settingsPath}.${process.pid}.tmp`;
 fs.mkdirSync(path.dirname(settingsPath), { recursive: true, mode: 0o700 });
 fs.writeFileSync(temporaryPath, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });

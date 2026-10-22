@@ -44,7 +44,7 @@ test("installer copies private gate files and appends the configured extension p
 	const settings = JSON.parse(await readFile(join(agentDirectory, "settings.json"), "utf8")) as { extensions: string[]; theme: string; packages: string[] };
 	assert.deepEqual(settings.extensions, ["/existing/extension.ts", extension]);
 	assert.equal(settings.theme, "dark");
-	assert.deepEqual(settings.packages, ["npm:existing-package"]);
+	assert.deepEqual(settings.packages, ["npm:existing-package", "npm:pi-web-access", "npm:@ff-labs/pi-fff", "npm:pi-subagents", "npm:@juicesharp/rpiv-todo"]);
 	const installedPolicy = await readFile(join(agentDirectory, "permission-policy.json"), "utf8");
 	assert.equal(JSON.parse(installedPolicy).defaultAutonomy, "off");
 	assert.equal(installedPolicy.includes("maxPermitRequestBytes"), false);

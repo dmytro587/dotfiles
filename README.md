@@ -17,22 +17,61 @@ Personal dotfiles and synchronization guides for macOS environment setup
 
 ## Installation
 
-1. Clone this repository:
+Follow these steps in order on a new Mac.
+
+1. Install the Xcode Command Line Tools. Git needs them:
 ```sh
-git clone https://github.com/yourusername/dotfiles.git
-cd dotfiles
+xcode-select --install
 ```
 
-2. Run the bootstrap script:
+2. Create the project folder and clone this repository. Use HTTPS, because SSH keys do not exist yet:
+```sh
+mkdir -p ~/Documents/www/projects
+git clone https://github.com/dmytro587/dotfiles.git ~/Documents/www/projects/dotfiles
+cd ~/Documents/www/projects/dotfiles
+```
+
+3. Run the bootstrap script:
 ```sh
 ./bootstrap.sh
 ```
 
 This will:
 - Install Homebrew if not present
-- Install packages from Brewfile
-- Install Oh My Zsh
+- Install packages and apps from Brewfile (only casks that the vendor tells you to install with Homebrew)
+- Install Docker, Telegram, Steam, Arc, VS Code, Yubico Authenticator, Notion, Slack, Obsidian, Ghostty, Spotify, and Cloudflare WARP from the vendor download URLs. An app that is already in `/Applications` or `~/Applications` is skipped, also for the Brewfile apps
+- At the end, print the vendor download page for Fira Code, which you install by hand
+- Install Oh My Zsh and the zsh-autosuggestions plugin
 - Copy dotfiles to your home directory
+- Create the project and screenshot folders
+- Install Node.js LTS with nvm and Yarn
+- Set up coding agents (see `bootstrap_agents.sh`)
+
+If an agent step fails, the bootstrap prints a summary at the end. Fix that step, then run `./bootstrap_agents.sh` again.
+
+4. Launch Orca once, then quit it. Then restore the Orca settings:
+```sh
+node .orca/_bootstrap/install.js
+```
+
+5. Set up SSH keys and your Git identity. Add the public key to your GitHub account when the script asks:
+```sh
+./ssh.sh "your.email@example.com"
+./github_setup.sh "Your Name" "your.email@example.com"
+```
+
+6. Sign in to the agents and apps. Include Claude Code, Codex, OMP, Pi, Droid, Orca, Docker Desktop, and the GitHub CLI (`gh auth login`).
+
+7. Build and install parrot. Run this by hand. The script asks before each step that has a risk:
+```sh
+./parrot_setup.sh
+```
+
+8. Move `topics/` from the old Mac. It is not in git. On the old Mac, zip it with `ditto`, which keeps hidden files and Obsidian settings:
+```sh
+ditto -c -k --keepParent topics ~/Desktop/topics.zip
+```
+Send `topics.zip` to the new Mac with AirDrop. Then unzip it into `~/Documents/www/projects/dotfiles/`.
 
 ## Orca Configuration
 

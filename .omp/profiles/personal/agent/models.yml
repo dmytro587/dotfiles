@@ -1,0 +1,32 @@
+# Runinfra serves GLM 5.3 Flash as glm-5-3-flash. OMP sends `id` as the API model name.
+# The hyphenated id does not match the built-in GLM ladder, so thinking is set here.
+providers:
+  runinfra:
+    baseUrl: https://api.runinfra.ai/v1
+    api: openai-completions
+    apiKey: "!cat $HOME/.omp/secrets/runinfra-gateway-key"
+    authHeader: true
+    models:
+      - id: glm-5-3-flash
+        name: GLM 5.3 Flash
+        reasoning: true
+        tokenizer: glm5
+        input: [text, image]
+        contextWindow: 1048576
+        maxTokens: 131072
+        cost:
+          input: 0.11
+          output: 0.45
+          cacheRead: 0.03
+          cacheWrite: 0
+        thinking:
+          mode: effort
+          efforts: [low, high, max]
+          defaultLevel: max
+          requiresEffort: true
+        compat:
+          thinkingFormat: zai
+          supportsReasoningEffort: true
+          maxTokensField: max_tokens
+          reasoningContentField: reasoning_content
+          requiresReasoningContentForToolCalls: true

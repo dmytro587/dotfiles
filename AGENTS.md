@@ -4,7 +4,7 @@ This repository is the agent-facing guide for a personal dotfiles repo. Its orig
 
 Layout:
 
-- Mirrored config files and setup/helper scripts at the repo root (`sync_claude_md_across_projects.sh`).
+- Mirrored config files and setup/helper scripts at the repo root.
 - `.agents/` — agent configuration, skills, and agent workflow rules (including this file's sync and communication rules).
 - `.pi/`, `.omp/` — agent harness configs (Pi permission gate, artifacts, gotchas, plugins, mcp's).
 - `docs/` — design papers, verification reports, and implementation plans.

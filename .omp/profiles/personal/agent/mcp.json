@@ -4,6 +4,10 @@
     "silpo": {
       "type": "http",
       "url": "https://mcp.silpo.ua/mcp"
+    },
+    "strava": {
+      "type": "http",
+      "url": "https://mcp.strava.com/mcp"
     }
   },
   "disabledServers": [

@@ -3,7 +3,6 @@
 
 export PATH=$PATH:$HOME/go/bin
 export PATH=$PATH:/opt/homebrew/bin
-export PATH=$PATH:$HOME/.bun/bin
 
 # Path to your Oh My Zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
@@ -119,12 +118,18 @@ export PATH="/Applications/Sublime Text.app/Contents/SharedSupport/bin:$PATH"
 # Add bun binaries to PATH
 export PATH="$HOME/.bun/bin:$PATH"
 
-# Fix issue with command not found
-export PATH=/bin:/usr/bin:/usr/local/bin:/sbin:${PATH}
+# Fix issue with command not found (/usr/local/bin omitted here — added below if needed)
+export PATH=/bin:/usr/bin:/sbin:${PATH}
+export PATH="/usr/local/bin:$PATH"
 
 export NVM_DIR="$HOME/.nvm"
 # This loads nvm
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  \. "$NVM_DIR/nvm.sh" --no-use
+elif [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then
+  # Fallback: nvm installed by Homebrew, when NVM_DIR has no nvm.sh
+  \. "/opt/homebrew/opt/nvm/nvm.sh" --no-use
+fi
 # This loads nvm bash_completion
 # [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
 
@@ -186,3 +191,8 @@ if [ -d "$HOME/google-cloud-sdk" ]; then
   # The next line enables shell command completion for gcloud.
   source "$HOME/google-cloud-sdk/completion.zsh.inc"
 fi
+# bun completions
+[ -s "/Users/beeshop/.bun/_bun" ] && source "/Users/beeshop/.bun/_bun"
+
+# orca/parrot dev build — must precede the release /usr/local/bin/parrot
+export PATH="$HOME/.local/bin:$PATH"
