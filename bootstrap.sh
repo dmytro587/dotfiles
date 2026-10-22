@@ -22,7 +22,8 @@ cd "$(dirname "$0")" || exit 1
 if ! command -v brew &> /dev/null; then
   echo "Installing Homebrew"
 
-  sh -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  # Homebrew's documented command. Under sh (bash in POSIX mode) it aborts.
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
 
 # On Apple Silicon, a new Homebrew install is not on PATH until shellenv runs
