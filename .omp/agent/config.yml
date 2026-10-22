@@ -22,7 +22,7 @@ modelRoles:
   plan: openai-codex/gpt-6.1-sol:xhigh
   memory: openai-codex/gpt-6-luna:max
   slow: anthropic/claude-opus-5-5:medium
-  default: openai-codex/gpt-6.1-sol
+  default: openai-codex/gpt-6.1-sol:auto
 providers:
   anthropic:
     serverSideFallback: false
@@ -59,8 +59,8 @@ browser:
   headless: true
 task:
   agentModelOverrides:
-    scout: cursor/composer-2.5-fast
-    sonic: cursor/composer-2.5:medium
+    scout: anthropic/claude-haiku-5-5:max
+    sonic: anthropic/claude-haiku-5-5:high
   enableEffort: true
   prewalk: true
 compaction:
