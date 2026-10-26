@@ -130,6 +130,13 @@ elif [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then
   # Fallback: nvm installed by Homebrew, when NVM_DIR has no nvm.sh
   \. "/opt/homebrew/opt/nvm/nvm.sh" --no-use
 fi
+
+# Add the newest installed Node.js bin directory without running nvm use.
+# N skips missing matches; / keeps directories; nOn sorts versions newest first.
+for node_bin in "$NVM_DIR"/versions/node/v*/bin(N/nOn[1]); do
+  export PATH="$node_bin:$PATH"
+done
+unset node_bin
 # This loads nvm bash_completion
 # [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
 

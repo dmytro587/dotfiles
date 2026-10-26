@@ -42,6 +42,24 @@ Unless the user requests another format, use one parent checkbox per action and 
 
 Put shared instructions under the parent and environment-specific values or commands under each child. Use the actual environment names; keep completion checks inside the matching environment item. Track every required action. Mark the parent complete only when all applicable children are complete; preserve reported progress.
 
+Inside a parent item, do not mix the action, its effect, the completion check, and failure handling in one paragraph. Give each kind of information its own labeled line, and include only the labels that apply:
+
+```markdown
+- [ ] **1. Do X.**
+
+  **What to do:** the action, with its command block if it has one.
+
+  **What it changes:** the effect on the target, and what stays unchanged.
+
+  **Expected result:** the observable completion condition.
+
+  **If it fails:** how to recover, and whether repeating the action is safe.
+
+  **Notes:** caveats that affect execution, one per bullet.
+  - [ ] Canary
+  - [ ] Production
+```
+
 ## Preserve state and handle repetition
 
 Distinguish adding, merging, replacing, and creating. Preserve unrelated configuration. Explain how to proceed if the target exists or the step was partially completed. Identify commands that clear populated values, regenerate credentials, or overwrite key material when repeated. Reuse prepared inputs unless replacement is required.

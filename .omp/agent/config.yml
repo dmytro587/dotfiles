@@ -61,7 +61,7 @@ task:
   agentModelOverrides:
     scout: anthropic/claude-haiku-5-5:max
     sonic: anthropic/claude-haiku-5-5:high
-  enableEffort: true
+  enableEffort: false
   prewalk: true
 compaction:
   handoffSaveToDisk: true

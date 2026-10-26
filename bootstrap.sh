@@ -150,7 +150,12 @@ killall SystemUIServer || true
 # "node" is the nvm name for the newest release, not the LTS line.
 export NVM_DIR="$HOME/.nvm"
 mkdir -p "$NVM_DIR"
-. "$(brew --prefix nvm)/nvm.sh"
+nvm_script="$(brew --prefix nvm)/nvm.sh"
+if [ ! -f "$nvm_script" ]; then
+  echo "nvm not found at $nvm_script. Check that brew bundle installed nvm." >&2
+  exit 1
+fi
+. "$nvm_script"
 if ! command -v node &> /dev/null; then
   echo "Installing the latest Node.js"
   nvm install node

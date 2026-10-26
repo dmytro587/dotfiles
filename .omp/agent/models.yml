@@ -1,6 +1,11 @@
 # Runinfra serves GLM 5.3 Flash as glm-5-3-flash. OMP sends `id` as the API model name.
 # The hyphenated id does not match the built-in GLM ladder, so thinking is set here.
 providers:
+  anthropic:
+    modelOverrides:
+      # The bundled catalog gives Claude Haiku 5.5 a 100k window. Use its full 1M window.
+      claude-haiku-5-5:
+        contextWindow: 1000000
   runinfra:
     baseUrl: https://api.runinfra.ai/v1
     api: openai-completions
