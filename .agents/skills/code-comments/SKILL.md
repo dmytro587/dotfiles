@@ -1,5 +1,5 @@
 ---
-name: goodkey-code-comments-writer
+name: code-comments-writer
 description: Use when writing, updating, reviewing, or analyzing code comments in the GoodKey codebase, including inline comments, section markers, JSDoc/TSDoc, TODO references, and review-only comment analysis.
 ---
 
