@@ -27,7 +27,7 @@ Name the operation above the matrix. On a rebase, HEAD is the new base and Incom
 
 1. List unmerged paths: `git status --short`, `git diff --name-only --diff-filter=U`, and `git ls-files -u`.
 2. For each path, diff both sides against the base (`:1:` vs `:2:`, `:1:` vs `:3:`). If they disagree, read the callers, tests, or lint rule. Reading those files is enough.
-3. Edit the working tree. Delete every conflict marker. Confirm the markers are gone and the paths stay unmerged (`UU`).
+3. Edit the working tree. Regenerate lockfiles with package manager tools instead of hand-editing. Delete every conflict marker. Confirm the markers are gone and the paths stay unmerged (`UU`).
 4. Do not lint, typecheck, format, test, start services, or run the app. Do that only if the user explicitly asks after the conflicts are resolved. Do not change tests to force a pass.
 
 ## Decision

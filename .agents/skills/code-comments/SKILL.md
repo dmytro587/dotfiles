@@ -3,7 +3,7 @@ name: code-comments-writer
 description: Use when writing, updating, reviewing, or analyzing code comments in the GoodKey codebase, including inline comments, section markers, JSDoc/TSDoc, TODO references, and review-only comment analysis.
 ---
 
-# GoodKey Code Comments
+# Code Comments
 
 Comments serve future readers: teammates working in unfamiliar code, future maintainers, and assistants that may see only one file. Each comment should reduce the effort needed to understand the code, not add another explanation that needs decoding. This applies to inline comments, section markers, and JSDoc/TSDoc.
 

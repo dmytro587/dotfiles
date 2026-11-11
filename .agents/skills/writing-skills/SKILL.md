@@ -437,6 +437,21 @@ Different skill types need different test approaches:
 
 **Success criteria:** Agent finds and correctly applies reference information
 
+### Rules Drawn From One Example
+
+An agent fills each section that a skill asks for. So a structure or rule that comes from one success can make other cases copy its shape, or make agents invent content.
+
+**Test with cases that differ from the source:**
+- The smallest case that the skill serves.
+- A case of a different kind.
+- A case that has no content for a part of the source.
+
+**Failure:** the output copies the shape of the source, or a part holds filler or imagined content.
+
+**Write each condition with its purpose and a contrast case on each side.** A short condition alone gets read in different ways. Take the contrast cases from different sources.
+
+**Success criteria:** the agent leaves out what a case does not need, and still includes what it does need.
+
 ## Common Rationalizations for Skipping Testing
 
 | Excuse | Reality |

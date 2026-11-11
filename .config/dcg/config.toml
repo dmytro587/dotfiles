@@ -1,0 +1,29 @@
+# Keep DCG's severity-based response policy.
+# Core Git, filesystem, and disk protection stay enabled by default.
+[packs]
+enabled = [
+  "database.postgresql",
+  "database.redis",
+  "database.sqlite",
+  "kubernetes.kubectl",
+  "kubernetes.helm",
+  "kubernetes.kustomize",
+  "cloud.aws",
+  "cloud.gcp",
+  "storage.s3",
+  "storage.gcs",
+  "infrastructure.terraform",
+  "remote.ssh",
+  "remote.rsync",
+  "remote.scp",
+  "system.permissions",
+  "secrets.aws_secrets",
+  "package_managers",
+]
+
+# Allow container cleanup and service management without these extra checks.
+disabled = [
+  "containers.docker",
+  "containers.compose",
+  "system.services",
+]

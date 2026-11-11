@@ -1,0 +1,1 @@
+- I am a visual person. Use a small diagram or sketch when it makes the main idea clearer; do not add one only to satisfy a format.

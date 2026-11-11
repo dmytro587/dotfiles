@@ -10,6 +10,8 @@
 # Run from the repository root regardless of the caller's working directory
 cd "$(dirname "$0")" || exit 1
 
+export PATH="$HOME/.local/bin:$PATH"
+
 failed_steps=()
 
 # Run one step. Record a failure and continue with the next step.
@@ -37,11 +39,20 @@ install_pi() {
   fi
 }
 
-# Copy repository files without deleting files that exist only in HOME.
-# AGENTS.md is linked separately so the repository file remains the source of truth.
-# A skill whose repo directory has no SKILL.md but has DISABLED_SKILL.md is
-# disabled: the home copy must not gain a SKILL.md, and an existing home
-# SKILL.md is removed so a locally disabled skill stays disabled after sync.
+sync_dcg_config() {
+  install -d -m 700 "$HOME/.config/dcg" || return 1
+  install -m 600 ./.config/dcg/config.toml "$HOME/.config/dcg/config.toml"
+}
+
+install_dcg() {
+  (
+    set -o pipefail
+    curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/destructive_command_guard/main/install.sh?$(date +%s)" | bash -s -- --easy-mode
+  ) || return 1
+  dcg --version
+}
+
+# Copy agent configuration, but link shared skills and instructions separately.
 sync_agent_folders() {
   for agent_dir in .agents .claude .omp .pi .factory .orca; do
     if [ ! -d "./$agent_dir" ]; then
@@ -51,7 +62,7 @@ sync_agent_folders() {
     if [ "$agent_dir" = .omp ] || [ "$agent_dir" = .orca ]; then
       rsync -a --exclude=_bootstrap "./$agent_dir/" "$HOME/$agent_dir/" || return 1
     elif [ "$agent_dir" = .agents ]; then
-      rsync -a --exclude=AGENTS.md "./$agent_dir/" "$HOME/$agent_dir/" || return 1
+      rsync -a --exclude=AGENTS.md --exclude=skills "./$agent_dir/" "$HOME/$agent_dir/" || return 1
     elif [ "$agent_dir" = .claude ]; then
       # settings.json holds machine state after first use, so it is never overwritten
       rsync -a --exclude=settings.json "./$agent_dir/" "$HOME/$agent_dir/" || return 1
@@ -66,16 +77,28 @@ sync_agent_folders() {
     else
       rsync -a "./$agent_dir/" "$HOME/$agent_dir/" || return 1
     fi
-    if [ "$agent_dir" = .agents ]; then
-      for skill_dir in .agents/skills/*/; do
-        skill=$(basename "$skill_dir")
-        if [ ! -f ".agents/skills/$skill/SKILL.md" ] && [ -f ".agents/skills/$skill/DISABLED_SKILL.md" ]; then
-          if [ -e "$HOME/.agents/skills/$skill" ] && [ ! -L "$HOME/.agents/skills/$skill" ]; then
-            rm -f "$HOME/.agents/skills/$skill/SKILL.md"
-          fi
-        fi
-      done
+  done
+}
+
+# Keep old copies outside the skills directory so local changes remain recoverable.
+function link_shared_skills() {
+  local skill_dir skill link_path backup_dir=""
+  mkdir -p "$HOME/.agents/skills" || return 1
+  for skill_dir in "$(pwd)/.agents/skills"/*; do
+    [ -d "$skill_dir" ] || continue
+    skill=$(basename "$skill_dir")
+    link_path="$HOME/.agents/skills/$skill"
+    if [ -L "$link_path" ] && [ "$link_path" -ef "$skill_dir" ]; then
+      continue
     fi
+    if [ -e "$link_path" ] || [ -L "$link_path" ]; then
+      if [ -z "$backup_dir" ]; then
+        backup_dir=$(mktemp -d "$HOME/.agents/skills-backup.XXXXXX") || return 1
+      fi
+      mv "$link_path" "$backup_dir/$skill" || return 1
+      echo "Saved existing skill: $backup_dir/$skill"
+    fi
+    ln -s "$skill_dir" "$link_path" || return 1
   done
 }
 
@@ -141,6 +164,9 @@ add_claude_mcp() {
 run_step "Install OMP" install_omp
 run_step "Install Pi" install_pi
 run_step "Sync agent folders" sync_agent_folders
+run_step "Link shared skills" link_shared_skills
+run_step "Sync DCG config" sync_dcg_config
+run_step "Install DCG" install_dcg
 run_step "Link shared AGENTS.md" link_agents_instructions
 run_step "Link Claude files" link_claude_files
 run_step "Link Pi skills" link_pi_skills

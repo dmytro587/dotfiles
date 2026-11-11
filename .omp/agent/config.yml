@@ -3,6 +3,7 @@ disabledProviders:
   - ollama
   - llama.cpp
   - lm-studio
+  - claude-plugins
 theme:
   dark: titanium
   light: light-dunes
