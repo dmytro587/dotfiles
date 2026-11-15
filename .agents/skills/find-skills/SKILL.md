@@ -1,5 +1,6 @@
 ---
 name: find-skills
+disable-model-invocation: true
 description: Discover and install agent skills when the user explicitly asks to find, search for, or install a skill, or when a needed capability is genuinely missing from the current set. Do NOT use for ordinary "how do I do X?" questions; answer those directly with existing capabilities first.
 ---
 

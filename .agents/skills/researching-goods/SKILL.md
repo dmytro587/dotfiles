@@ -1,5 +1,6 @@
 ---
 name: researching-goods
+disable-model-invocation: true
 description: "Use when users ask to find, verify, compare, recommend, price-check, or assess availability, compatibility, delivery, or visual matches for products or goods online."
 ---
 

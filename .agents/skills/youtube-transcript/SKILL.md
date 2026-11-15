@@ -1,5 +1,6 @@
 ---
 name: youtube-transcript
+disable-model-invocation: true
 description: Use when a user provides a YouTube URL and needs spoken captions for analysis, summarization, quoting, or search.
 ---
 # YouTube Transcript

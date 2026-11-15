@@ -1,5 +1,6 @@
 ---
 name: humanizer
+disable-model-invocation: true
 description: |
   Rewrite AI-sounding text so it reads naturally without changing what it says.
   Use when editing or reviewing prose for inflated claims,

@@ -1,5 +1,6 @@
 ---
 name: caveman
+disable-model-invocation: true
 description: >
   Activate ONLY on an explicit mode request: "caveman mode", "talk like
   caveman", "use caveman", or /caveman. A one-turn brevity request such as

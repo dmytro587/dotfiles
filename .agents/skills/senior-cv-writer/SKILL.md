@@ -1,5 +1,6 @@
 ---
 name: senior-cv-writer
+disable-model-invocation: true
 description: Use when drafting or reviewing a senior software-engineer CV, experience section, project card, or HTML CV where evidence is incomplete and the wording risks sounding task-list driven, generic, inflated, junior, or AI-generated.
 ---
 

@@ -1,5 +1,6 @@
 ---
 name: handoff
+disable-model-invocation: true
 description: Use when a session may pause, transfer work, or resume without a complete current prompt.
 argument-hint: "What will the next session be used for?"
 ---

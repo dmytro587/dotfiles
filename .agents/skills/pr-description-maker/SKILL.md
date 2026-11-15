@@ -6,6 +6,16 @@ description: Use when asked to write, update, or rewrite a pull request descript
 
 Write PR descriptions for reviewers, not for local implementation planning.
 
+## Checks: run them on every write and every edit
+
+Run these checks before you return a description, when you wrote it from scratch, rebuilt it, or changed one line of an existing one. A small edit does not exempt the rest of the text: the old text can hold the problems that the checks find.
+
+1. For each section, name the question a reviewer asks that it answers. A section with no such question is removed.
+2. Read the text from the start as a reader with no notes. At each sentence, ask: from where, to what, and what is this? Fix each sentence that needs our context.
+3. Read each heading as the reviewer: "X of what? Why does it matter?" If a section does not answer both questions without our context, add the background. For example, "The dry run uses apply's decisions" fails: the reader does not know which dry run, what it is for, or what "apply" means.
+4. Ask of each part: would this reader miss it if it were gone? If not, remove it.
+5. Search the text for four defects and remove each one you find: a diff block that repeats the PR diff, first-person wording ("I did not"), how you reached the change (where you first put it, what you tried before), and a line that credits a tool or an agent (add one only if the user or the repository asks).
+
 ## Rules
 
 - Write for a teammate. They know the product and its components, but they did not see this task, its discussions, or local docs. Before you state a change's reason, say what the affected feature is and what it is for, unless a teammate already knows it.
@@ -54,9 +64,12 @@ If you need structured data for the description, add `--json` to `gh pr view` an
 
 There is no fixed form. Start from the diff, and ask what a reader of this PR needs to review it or understand it later. Include a part only if this PR has real content for it.
 
+Treat the table below as a menu, not a form. Add a part only if you can name a question from a reviewer that it answers and that the text above it does not answer. A one-line config change can be a short paragraph on why, who it affects, and how it reaches each environment. A new feature that adds a table, an endpoint, and a service needs more parts, because the reader has no other way to see how they fit.
+
 - The size follows the PR. A small, clear fix can be the issue and the fix, in a few lines.
 - A small PR can still need a large part. For example, a one-line fix that chose between two non-obvious options needs its reason.
 - Never invent a decision, alternative, limit, or plan to fill a part. If the PR has no real content for a part, leave it out.
+- Do not write how you reached the final change: where you first put it, what you tried before, or a scope that changed during the work. A reviewer cannot argue with it. "Values are in the shared file, not in each environment file" is history when the diff shows it and no reviewer would ask for the other way.
 - Put first what the reader needs to judge the PR. Put reference detail later, or in `<details>` blocks.
 - If the PR is large, or the reasons are not clear from the diff and the context, show the user the main points and the order before the full draft. For a small, clear PR, write it.
 
@@ -72,10 +85,10 @@ The examples below show each side of the choice. They are not limits.
 | Decisions | Why this way, and not another? | A reviewer could reasonably ask for another approach, or the choice has a cost. State the reason, and the alternative and the cost if they are real | Only one reasonable way exists, or you know the behavior but not the reason. Describe the behavior under How it works, or ask the user |
 | Limits | What would a reader wrongly assume that this does? | The approach leaves a lasting gap that a reader should know | Nothing here could mislead a reader. A gap that planned work closes is not a limit |
 | Future work | Would knowing the plan change how the reader judges this PR? | The change looks incomplete now, a decision only makes sense because of what comes later, or code is not used yet and a known next step needs it. State intent and result, not implementation steps | We might improve it some day, and that changes nothing in how this PR reads. Never write a plan that nobody stated |
-| Changes | What are the separate parts of this PR? | Several separate changes. For a fix: Background, Problem with one example, Fix. For a feature: What it adds, How it works. Use the shape in "Changes section" below | One change that the text above already describes |
+| Changes | What are the separate parts of this PR? | Several separate changes. For a fix: Background, Problem with one example, Fix. For a feature: What it adds, How it works. Use the shape in "Changes section" below | One change that the text above already describes. A few lines of diff that the reviewer sees in the PR diff add nothing: show a structure the diff does not show, or show nothing |
 | Other changes | What was done outside the task? | A refactor made along with the task | Nothing outside the task |
 | Testing | What can a reviewer not see from CI? | Behavior that the tests do not cover, manual steps with their result, or a test coverage list in a details block. Put these under their own `## Testing` heading, not under another section | Only that CI passed, because the PR shows it. Also syntax, format, or `git diff --check` results, or failures that must be fixed before merge |
-| Manual migrations | What must an operator do by hand? | Infra changes need follow-up. Use a todo list: each item starts with `- [ ]` and a verb | No manual follow-up |
+| Manual migrations | What must an operator do by hand? | Infra changes need follow-up. Use a todo list: each item starts with `- [ ]` and a verb. Follow "Manual migrations list" below | No manual follow-up |
 | Notes | What else could surprise the reader? | A rollout or deployment scope note | Nothing else |
 
 When you use a diagram, show actual runtime behavior with accurate labels, not speculative or future components. In Mermaid sequence diagrams, do not put `;` or `#` in message text: `;` ends the statement and breaks the diagram.
@@ -100,9 +113,18 @@ Include only the views that help explain this PR. A view with no real change in 
 - Call-tree, call-stack, control-flow, or data-flow changes.
 - Any other structure that this PR changes and that a reviewer must see.
 
-Prefer a `diff` block when you show a change to an existing shape.
+Prefer a `diff` block when you show a change to an existing shape that the PR diff does not show at a glance, such as a file tree, a type, or a contract across several files. Do not paste lines the reviewer sees in the PR diff: a one-line value change is said in words ("sets `LOG_LEVEL` from `debug` to `warn`"), not in a diff block.
 
 Show the complete target shape instead when most of it is new, or when diff notation would hide which part owns what or the order of steps.
+
+## Manual migrations list
+
+The list is the record of the rollout. An operator ticks it by hand, before and after the merge, so it must show what was really done and where.
+
+- An action that runs on more than one target (cluster, namespace, region, environment) is one parent checkbox with one child checkbox for each target. Name each child by its real target, for example `- [ ] test-a, namespace default`. Text that is the same for every target goes under the parent. A command or value that differs per target goes in its child.
+- Do not write "do the same for the other clusters" or "repeat for production". Do not list the targets as plain bullets, in a sentence, or in a table under one checkbox. A target without its own checkbox cannot be marked done, so the list cannot show where the action is still open.
+- An action that runs once for the whole system, such as one schema migration, has no children.
+- When each step needs its own result and recovery lines, use the `write-migration-steps` skill.
 
 ## Writing Guidance
 
@@ -111,12 +133,4 @@ Show the complete target shape instead when most of it is new, or when diff nota
 - If the PR adds a setup or rollout script, mention what it installs or changes and where it runs.
 - If the PR adds UI, dashboards, or deployed infrastructure, include the access path reviewers need to inspect it.
 - A failed check caused by this PR means the PR is not ready: fix it, do not describe it as a known issue. Disclose material verification limits in the body (for example, "full suite not run; auth tests pass") instead of omitting them when they affect reviewer judgment. Mention an unrelated validation failure only when it materially affects reviewer verification, and include the command, failure, and why it is unrelated.
-
-## Final check
-
-Read the text from the start as a reader with no notes. At each sentence, ask: from where, to what, and what is this? Fix each sentence that needs our context.
-
-Before you finish, read each heading as the reviewer: "X of what? Why does it matter?" If a section does not answer both questions without our context, add the background. For example, "The dry run uses apply's decisions" fails: the reader does not know which dry run, what it is for, or what "apply" means.
-
-Then ask of each part: would this reader miss it if it were gone? If not, remove it.
 
