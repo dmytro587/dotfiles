@@ -9,12 +9,24 @@ A PR review lives in `./docs/task/` as a small workspace that matches the PR's c
 
 **REQUIRED BACKGROUND:** `tracking-task-progress` (workspace rules and `progress.md`). Use `code-review` or `review` to inspect code, `pr-review-readiness` to map feedback to the diff, and `writing-review-findings` for the format of each finding.
 
+## Review workflow
+
+For an initial review or a requested broader re-review, establish the review basis before inspecting code for defects. A refresh continues from the saved basis rather than starting again.
+
+1. **Understand the PR first.** Establish its intended outcome, affected behavior, constraints, and relevant sources. Read the PR and supporting requirements, callers, tests, or existing implementation as relevant. Do not invent requirements when a source is absent; record material uncertainty.
+2. **Write the review criteria before reviewing.** Record what correctness means for this PR and which sources support it. Derive criteria from the actual change and its risks, not a fixed checklist copied from another PR.
+3. **Review against those criteria.** Use them to direct inspection. Investigate other defects encountered within the review scope even if they are absent from the criteria; this does not authorize an unrelated repository audit.
+4. **Track findings and coverage separately.** For each criterion, record whether it was checked, partly checked, or skipped, with evidence and limits. Link findings where present. No findings does not mean the criterion was checked, and source inspection does not prove runtime behavior.
+5. **Carry context into later rounds.** Read the saved context, criteria, findings, and coverage. Within the requested scope, recheck fixes and criteria affected by new commits or changed requirements, and update their evidence. Preserve the revision of earlier evidence; do not imply unchanged areas were checked again. Do not automatically repeat the full review.
+
+Keep short criteria and coverage notes in `pr-context.md`. Use a separate linked focus file only when the detail warrants it. A small correction may need only a few lines; a substantial feature may need several criteria. For prose-only changes, check the relevant wording or instructions rather than inventing runtime behavior or mandatory tests.
+
 ## Two modes
 
 | Mode | When | What you do |
 |---|---|---|
 | **Initial** | No saved review for this PR | Create the workspace automatically, then review. |
-| **Refresh** | A saved review exists and the PR changed | Read the saved files first. Check each existing finding against the new head. Do not start a new full review. A new defect found while checking is recorded as a new finding; a broad re-review needs its own request. |
+| **Refresh** | A saved review exists and the PR changed | Read the saved files first. Recheck findings and affected criteria within the requested scope against the new head. Do not start a new full review. A new defect found while checking is recorded as a new finding; a broad re-review needs its own request. |
 
 ## Workspace
 
@@ -22,7 +34,7 @@ A PR review lives in `./docs/task/` as a small workspace that matches the PR's c
 
 | Starting file | Answers |
 |---|---|
-| `pr-context.md` | What was reviewed: PRs, base and head SHAs, local changes included or excluded, goal, constraints. |
+| `pr-context.md` | What was reviewed: PRs, base and head SHAs, local changes included or excluded, goal, constraints, review criteria, and coverage. |
 | `findings.md` | What is wrong, and the status of each finding. |
 | `github-state.md` | What GitHub shows, and what was changed there with approval. |
 

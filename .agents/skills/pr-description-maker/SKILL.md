@@ -11,7 +11,10 @@ Write PR descriptions for reviewers, not for local implementation planning.
 Run these checks before you return a description, when you wrote it from scratch, rebuilt it, or changed one line of an existing one. A small edit does not exempt the rest of the text: the old text can hold the problems that the checks find.
 
 1. For each section, name the question a reviewer asks that it answers. A section with no such question is removed.
-2. Read the text from the start as a reader with no notes. At each sentence, ask: from where, to what, and what is this? Fix each sentence that needs our context.
+2. Read the text from the start as a reader with no task notes. At each sentence, ask: from where, to what, and what is this?
+   - For each problem, exception, or limitation, first ask whether it affects review, verification, or use of this change. Remove it if not, even when it was discovered during the task.
+   - If it matters, explain the affected behavior, triggering condition, consequence, and relation to this PR. Conversation and task-note facts are not shared reviewer knowledge; calling a problem "legacy", "existing", or "known" does not explain it.
+   - An unrelated worker failure does not belong in a small export-format fix. A certificate failure that blocks a changed endpoint's rollout does need an explanation. If no material exception exists, add no limitations paragraph or section.
 3. Read each heading as the reviewer: "X of what? Why does it matter?" If a section does not answer both questions without our context, add the background. For example, "The dry run uses apply's decisions" fails: the reader does not know which dry run, what it is for, or what "apply" means.
 4. Ask of each part: would this reader miss it if it were gone? If not, remove it.
 5. Search the text for four defects and remove each one you find: a diff block that repeats the PR diff, first-person wording ("I did not"), how you reached the change (where you first put it, what you tried before), and a line that credits a tool or an agent (add one only if the user or the repository asks).
@@ -57,6 +60,8 @@ If the source of changes is not explicit, stop and ask the user to choose one sc
 - Only the local diff: `git diff --staged`, `git diff`.
 
 Use exactly the scope the user picked; do not mix scopes or silently fall back to another one. When the scope includes local changes, enumerate untracked files, exclude known temporary task documents by default, and ask whether other untracked files belong in the description.
+
+After the diff scope is chosen, use available task context to understand its reason, constraints, and verification: read `progress.md` and the relevant linked context files, including task context named by the user in another repository. Use those facts to explain the selected diff, not to expand its change scope. Excluding temporary task documents from the PR body does not mean ignoring their relevant facts. If no task context exists, use the diff and callers; do not create task documents for the description.
 
 If you need structured data for the description, add `--json` to `gh pr view` and filter with `--jq`.
 

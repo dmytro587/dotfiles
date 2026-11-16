@@ -13,7 +13,7 @@ Use this after the review itself. This skill controls the saved report, not how 
 2. Under the title, give the review date, actual reviewing model, exact scope (including exclusions or diff range), and useful context as short subtitle text.
 3. `## Goal, scope, and context`: why the review was done, what should hold, and what was inspected.
 4. `## Verdict`: **Requested changes**, **Ready for merge**, **Needs discussion**, or a more fitting label, followed by the reason. Use “Ready for merge” only if that conclusion is supported by the reviewed scope and checks. Open with what is broken, what is fixed or still open, and whether the next step is a decision or more evidence. Name every defect here, in words, before the first code block in the report. A later overview must not soften that settled-versus-unverified split.
-5. `## Findings`: one subheading per distinct finding, with a risk level (Critical, High, Medium, or Low), `- [ ] Resolved`, the impact and conditions, precise source location, and a suggested correction. An empty list must say “No findings in the reviewed scope”; never invent findings.
+5. `## Findings`: one subheading per distinct finding, titled with the problem and a risk level (Critical, High, Medium, or Low), then `- [ ] Resolved`, a plain explanation of what goes wrong and when, the precise source location, and a suggested correction. The shape of the explanation depends on the finding; see "Show the problem and correction". An empty list must say “No findings in the reviewed scope”; never invent findings.
 6. Add other sections only when they make the report easier to act on, such as evidence limits or rollout notes. Label each section’s job and its limit in the first sentences (for example “acceptance checks, not results” or “audit trail, not a second argument”). Say once how the sections depend on each other. Do not let a later section read as a second verdict.
 7. `## Checks ran`: name each check and its observed result where the reader can see them. `## Checks skipped and why`: name each relevant omitted check and reason. Do not claim a check ran when it did not. Next to a result, say what it does not prove. Full command output and logs go at the end of this section, collapsed.
 8. `## Open questions (operator only)`: only decisions an operator must make; write “None” if there are none. An evidence gap is not a decision: inspect the missing source before asking. Keep one decision, and mark the same split of settled versus unverified in the verdict, the findings, and any overview.
@@ -54,7 +54,16 @@ Do not delete that material to shorten the page. The toggle is what keeps the in
 
 ## Show the problem and correction
 
-Order each finding as impact, then the cause path, then source, then the correction. State the user or operator consequence before any code. Give each finding its own short cause-and-effect chain; a diagram for one defect does not explain another.
+Title each finding with the problem, using its common name when one exists (deadlock, race condition, data loss, N+1 query), not with the fix. Write "Deadlock when two task results are updated at once", not "Lock task-result contents in a consistent order". A reader who stops at the title must know what is broken.
+
+Open the finding with one or two plain sentences that a reader who does not know this code can follow. Define each domain term at its first use, or avoid it. Do not use a label such as "report" or "result" before the text says what it is.
+
+Choose the explanation shape by how the failure happens:
+
+- **One step from cause to effect** (a wrong value, a missing check): short labeled fields are enough, as in the replica example below. Adding a scenario or diagram here is filler.
+- **Two or more actors, or a sequence in time** (deadlock, race, retry loop, lock order): first tell the scenario in a few sentences, then show a sequence or wait-for diagram. Impact and cause follow from the story; do not compress them into a field before the reader has seen it. See the deadlock example below.
+
+The labeled fields (Impact, Cause, Location) are a checklist of what the finding must contain, not a required layout. Merge them into prose when that reads better, and do not add fields that the case does not need. State the user or operator consequence before any code. Give each finding its own cause-and-effect explanation; a diagram for one defect does not explain another. A one-step cause can be a short chain:
 
 ```text
 CA returns a nickname
@@ -67,7 +76,7 @@ For every code finding, include a fenced, language-tagged **Current** block with
 
 For documentation, configuration, or other non-code findings, use the same pattern: quote the exact relevant text or value in a fenced **Current** block, then show the proposed replacement in a fenced **Suggested correction** block. If no meaningful replacement exists, state the concrete action needed instead of fabricating a block. If the original cannot be inspected, clearly mark the finding as unverified and do not present a reconstructed quote as exact.
 
-Example of the finding format (illustrative, not review evidence):
+Example of a one-step finding (illustrative, not review evidence):
 
 ### High: Minimum replicas not met
 
@@ -86,6 +95,28 @@ replicas: 1
 ```yaml
 replicas: 3
 ```
+
+Example of a sequence finding (illustrative, not review evidence):
+
+### Medium: Deadlock when two orders reserve the same two items in opposite order
+
+- [ ] Resolved
+
+Order 1 and order 2 each need items A and B. Each locks its first item, then waits for the other's:
+
+```mermaid
+sequenceDiagram
+    participant O1 as Order 1
+    participant DB as Database
+    participant O2 as Order 2
+    O1->>DB: Lock item A
+    O2->>DB: Lock item B
+    O1->>DB: Lock item B (waits for order 2)
+    O2->>DB: Lock item A (waits for order 1)
+    DB-->>O2: Deadlock detected, order 2 aborted
+```
+
+Neither can continue, so the database aborts one order and the customer sees a failed checkout. **Location:** `reserve.ts`, lines 20–31. The **Current** and **Suggested correction** blocks follow as for any code finding; here the correction locks items in sorted ID order.
 
 Keep the verdict consistent with unresolved risks. When the operator confirms a fix, change only that finding to `- [x] Resolved` after verifying the correction; do not mark findings resolved based on intent alone.
 
