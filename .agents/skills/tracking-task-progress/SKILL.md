@@ -16,9 +16,14 @@ description: Use when the current worktree has a `./docs/task/` folder, at sessi
 - Keep `progress.md` short, with these sections: Goal, Next action, State, Decisions, Known risks, Open questions and risks, Context files. Known risks and Open questions and risks can be empty:
   - It shows the current state of the work. It is not a log. Replace stale content, and do not append events;
   - Each record must be clear when read alone. The reader can see what it belongs to, what its status is, and why it matters;
+  - A record that points to a plan step in another file names the step in full and links the section that holds it, so the reader can go there without a search (for example 'Waits for: rollout step 4, "Logins for each role" ([design.md](design.md#rollout-steps))', not "rollout step 4"). A step that is a line in State needs the name only. When the heading of that section changes, update the links in the same edit;
+  - A record is the conclusion and its reason, in 1 to 3 sentences. When a record needs more (how the mechanism works, the evidence, a method), move that detail to the context file for its topic and link it. Do not create a file for one paragraph: a small task with no context files keeps the longer record;
   - Put what the reader needs first: the conclusion or outcome, then who decided it, then the reason and the evidence. For example, an accepted risk starts with what we accept ("a removed teammate keeps access for up to 8 hours"), not with how the mechanism works. A record whose first words already are the conclusion (for example "Direction: option 3") needs no change;
+  - Name who decided only when the section does not show it. Decisions holds only what I confirmed, so a record there does not say "confirmed by the user". A decision that came from another person or team names them (for example "the platform team requires IMDSv2");
+  - When the Goal can be read wider than the task (for example the Goal names "the clusters", but the work stops at testing-dev), state the limit as a scope decision. If I did not confirm the limit, add a Question. A Goal that matches the task needs no such record;
   - Before you add a record, look for a record that already covers the topic, and change that record;
   - If a record will not matter next week, do not add it;
+- `progress.md` and chat must not contradict each other;
 - Update `progress.md` when I confirm a decision, when the state of a step changes, when the next action changes, or when you find a risk, blocker, dependency or plan gap. Do not record unconfirmed proposals. Findings are not proposals: record them;
   - When the state of a step changes, read all of `progress.md` in the same turn, not only the line you change. A one-line edit leaves the other records that the same change affects out of date;
   - Remove an open item that the step answered, after you write its outcome in its home (for example "Question: does the importer accept empty files?" after the import step passed with empty files). Keep an item that still applies after the step (for example "Risk: a rollback needs a manual image copy" after a rollout step);
@@ -44,10 +49,12 @@ description: Use when the current worktree has a `./docs/task/` folder, at sessi
     - It limits what we claim to users;
     - It accepts a risk. The record goes in Known risks, not in Decisions;
     - It limits the scope of the whole task (for example "change code only in this repo"). A single parameter or feature that we did not build is not a scope limit;
-    - It affects several stages or components;
+    - It governs the work of several phases, and no single phase owns it (for example "direction: option 3", which research, design and rollout all follow). A decision about the content of one phase (for example the identity model of a design) goes in the file of that phase, also when later phases build on it;
     - Undoing it would cause harm, and the code does not show that it was deliberate;
   - Before you add a decision to `progress.md`, name the test it meets. If no test clearly fits, use the context file;
   - These tests are guidance. If I ask to keep a decision in `progress.md`, it stays there;
+  - When the context file for the stage does not exist yet (for example a design decision that I confirm during research), put the decision in `progress.md`. When that file is written, move to it the decisions that meet no test, and update the references to them in the other files;
+  - A context file can hold proposals that I did not confirm yet (for example a design draft), which `progress.md` cannot. Its first lines then say so, and the file shows which parts are confirmed: a "Confirmed decisions" section, and "Proposed" in the heading of each part that is not confirmed. When I confirm a part, remove its mark in the same turn. A file with no proposals (for example research facts) needs no status line;
   - One decision per record: if one part can change while the other stays true, split the record. A reason or a detail of the same choice stays in the record;
   - When a decision changes, replace the record. Do not add a second record;
   - When the list is long, group the records as a nested list, from high level to low level: a top-level item names the group (for example "- Infrastructure:"), and the group's records are nested under it. Do not use Markdown headings (`###`) for groups, because headings split one section of `progress.md` into many small sections. A short list (for example 4 records) stays flat; a list of 10 records from several areas gets groups;
@@ -58,6 +65,16 @@ description: Use when the current worktree has a `./docs/task/` folder, at sessi
   - Values that change with each build or run (versions in use, digests, generated hashes) are facts, not decisions. Put them in a context file;
 
 ## Known risks
+
+Where a risk lives:
+
+| State of the risk | Home |
+| --- | --- |
+| No confirmed mitigation, not accepted | Open questions and risks |
+| Confirmed mitigation that still has open checks | Open questions and risks, with the checks nested |
+| Confirmed mitigation removes the risk | A decision in its plan step or stage file; the risk is deleted |
+| Confirmed mitigation lowers the risk or gives a recovery path | Known risks, Mitigated |
+| Accepted by me | Known risks, Accepted by the user |
 
 - Known risks holds the risks that need no action now, so that Open questions and risks shows only what needs action. Group the records by type as a nested list, so the reader sees the type before the records: a top-level item names the group ("- Mitigated:" or "- Accepted by the user:"), and the group's records are nested under it. Leave out a group that has no records:
   - Mitigated: "<risk>. Mitigation: <phase or step>" for a risk that can still happen after a mitigation I confirmed: the mitigation lowers its chance or its effect, or gives a recovery path (for example "a broken Tailscale blocks SSH; recovery: reopen port 22 in the security list"). Keep it while it can still happen;
@@ -70,8 +87,11 @@ description: Use when the current worktree has a `./docs/task/` folder, at sessi
 
 - Open questions and risks holds only items that need action or my decision, each with a label (Blocker, Risk, Question). A Risk here has no confirmed mitigation and is not accepted:
   - When an item is resolved, remove it: record the outcome as one decision in its home, and put its details in the related context file;
-  - When I confirm a mitigation step or accept a risk, move the risk as the Known risks rules say: to Known risks, or into its plan step when the mitigation removes it. A risk whose mitigation still has open checks stays here;
+  - When I confirm a mitigation step or accept a risk, move the risk as the Known risks table says;
   - Out-of-scope items for later go in `backlog.md`, linked from Context files;
+  - An open item has one home, `progress.md`. A context file can mark a fact "Not verified" next to its evidence, but it keeps no list of open questions of its own (for example an "Open questions" section at the end of `design.md` that repeats `progress.md`). Review records are the exception: review findings and review feedback keep their status in their own file (`review/findings.md` by `tracking-pr-reviews`, `review-feedback.md` by `pr-review-readiness`). `progress.md` gets their counts in the State line of that phase, and an open item only for one that blocks Next action or needs my decision;
+  - The reader must see which items block Next action. When some items need me now and others wait for a planned step, group them as a nested list, as in Known risks: "- Needs the user now:" for items that need my decision or my action, and "- Waits for a planned step:" for checks that a later step will answer, each ending with "Waits for: <phase or step>". An item that no planned step answers goes in the first group. A list with one kind of item stays flat;
+  - The words of an open item must not read as finished. For a check that a later step will answer, write "Waits for: rollout step 4", not "Answered by: rollout step 4";
 - When I ask to close the open items, work on every item in Open questions and risks, Risks included, not only the Questions. A Risk needs my decision: present the options and their effects, and ask;
 - Before Next action moves to a new phase (research, design, implementation, or a rollout to the next environment), read all of `progress.md` again and write what blocks the new phase in Open questions and risks:
   - For each Risk in Open questions and risks, ask whether it changes the work of the new phase. If yes, ask me to decide it before the phase starts (for example, a credential risk that changes the access design). If no, leave it there (for example, a production rollout risk during design);
@@ -84,4 +104,3 @@ description: Use when the current worktree has a `./docs/task/` folder, at sessi
   - A phase with 1 file keeps it at the root of `./docs/task/`. A small task with 2 files from different phases stays flat;
   - `progress.md`, `backlog.md` and `PR_DESCRIPTION.md` always stay at the root, because they belong to the whole task, not to one phase;
   - When a phase gets its second file, move both files into the folder. When you move a file, update all links to it, in `progress.md` and in the other context files;
-- `progress.md` and chat must not contradict each other;

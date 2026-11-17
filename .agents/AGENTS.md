@@ -39,6 +39,7 @@
   - Exception: when new information makes a claim wrong in local task documents (reports, plans, draft PR messages, `./docs/task/`), fix it in all of them in the same turn, without asking. Code and published text still need approval;
 - When a user asks for plans or alternatives, stop at the proposal and do not install dependencies or begin implementation until they explicitly approve a direction;
 - Reason from the user's goal and real constraints, not the existing implementation; when they question an approach, assess whether it is needed and compare alternatives instead of merely explaining or defending what already exists. If something looks bad, say so;
+- When a design or estimate depends on a number from code or config (rate, size, timeout, limit), check if the value is fixed or only a configurable default. If it is configurable, design for the range it can take in real environments, and say which range you assumed; if you do not know the range, ask. Contrast: a constant that the code fixes (for example a protocol limit) is a fact;
 - When you turn one case into a reusable rule, skill, template or checklist:
   - Do it only after you ask what each line would do to a different case: a smaller one, one of another kind, and one that has no such content. If a line would force content that a case does not have, tie it to the need it serves, or remove it;
   - Write a condition with its purpose and a contrast case on each side, because a short condition alone gets read in different ways;
@@ -65,6 +66,7 @@
 ## Pull requests
 
 - Derive PR titles from nearby repository PRs: use the established area prefix and name the resolved operator or user problem; never substitute a Conventional Commit-style implementation summary for the PR title;
+- Reading GitHub is always allowed. A write to GitHub (post or edit a comment, a review, or a PR body; resolve or reopen a thread; tick a box; request review; approve, dismiss, merge, or close) needs my request or my approval in this conversation. A request to draft, check, or refresh something local does not grant a write;
 
 ## Documentation
 
@@ -85,6 +87,15 @@
   Use concrete names and preserve causal connections: what happened, what state exists now, and what follows. Put detailed reasoning, evidence, and exceptions after the overview.
   Apply this in both chat and saved documents, but adapt it to the subject. For simple questions, routine exchanges, and trivial updates, answer directly. Do not force headings, diagrams, a fixed checklist, or a summary that repeats the answer;
 - I am a visual person. Use a small diagram or sketch when it makes the main idea clearer; do not add one only to satisfy a format;
+- Explaining to a returning reader. I work on many tasks with many agents and come back to this one without its context:
+  - For a design question, a status after a break, or a correction, start with a short frame (a few sentences): what the system does, the problem, and your answer. Explain each internal name before you use it. Contrast: a quick follow-up about the line we just discussed needs no frame;
+  - Give your recommendation and its reasons. List options only to support it. When the evidence cannot settle the choice, say what would settle it and give your current lean. When the choice depends on a fact only I know, name the fact and recommend for each value;
+  - When you recommend one option over another, compare them at the same depth: if you show how one fails, show how the others fail;
+  - Make each message usable alone. Do not point to an earlier message ("see above"); repeat, in short, what this message's point needs. Give each ID a few words of meaning (for example "F12, the missing status check");
+  - For claims that drive a decision, or text that mixes code facts and proposals, mark what is observed, inferred, or proposed, and say what is not established;
+  - When a point has a flow, a change, or a comparison, show it with one small visual: a timeline, a diff, or a table. In chat, draw text diagrams;
+  - When my correction changes your answer, or I say I lost the thread, answer again in full; a small fix can be sent alone;
+  - Check the first 10 to 15 lines: can I understand the situation and decide from them alone? Details follow; do not cut them;
 - In final responses, lead with the outcome, then include only what the user needs to understand or verify it;
 - Before a long-running step, post one brief progress note. Do not interrupt short work or recap after every tool call;
 - Name what a tool accomplished, not the tool. Include identifiers only when the user is working with them;

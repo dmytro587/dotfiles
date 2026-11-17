@@ -6,148 +6,103 @@ argument-hint: "<PR number or URL, or nothing for current branch>"
 
 # PR Review Readiness
 
-Audit whether review feedback is actually addressed in the current PR state. This is the **author-side** gate before re-requesting review or claiming the PR is merge-ready — not a code-quality review (use `code-review` for that).
+Audit whether review feedback is actually addressed in the current PR state. This is the **author-side** gate before re-requesting review or claiming the PR is merge-ready. It is not a code-quality review (use `code-review` for that), and it is not the reviewer's record of findings (use `tracking-pr-reviews` for that).
 
-**Core principle:** Every piece of feedback gets a evidence-backed disposition. "I think we fixed it" is not ready.
+**Core principle:** Every piece of feedback gets an evidence-backed disposition. "I think we fixed it" is not ready.
 
 ## When to Use
 
 - User asks if the PR is ready for review / re-review / merge after comments
 - Before `@`-mentioning reviewers or clicking "Re-request review"
-- After a batch of fix commits — sanity-check nothing was dropped
+- After a batch of fix commits, to check that nothing was dropped
 - When the PR still shows **Changes requested** or open review threads
 
-**When NOT to use:** First review of a new PR with no feedback yet — use `code-review` or `requesting-code-review` instead.
+**When NOT to use:** First review of a new PR with no feedback yet. Use `code-review` or `requesting-code-review` instead.
 
 ## Scope First
 
 State exactly what you checked:
 
-- PR number, title, URL, base branch
+- PR number, title, URL, base branch, and head SHA
 - Diff range: latest push on the PR branch (via `gh pr diff`), plus whether **local uncommitted** work is included or excluded
 - Which feedback sources you included: review threads, top-level review bodies, issue comments on the PR
 
 If the target PR is ambiguous, ask once. Default: current branch's open PR.
 
-## Gather Feedback (GitHub CLI)
+## Gather Feedback
 
-Run from the repo root. Replace `PR` with number or omit when on the PR branch.
-
-### PR metadata and checks
+Run the script in this skill's directory. It only reads GitHub.
 
 ```bash
-gh pr view PR --json number,title,url,state,baseRefName,headRefName,reviewDecision,mergeable,statusCheckRollup
+scripts/fetch-pr-feedback.sh --pr PR    # omit --pr on the PR branch; --help shows all options
+gh pr diff PR                           # the diff that reviewers see
 ```
 
-### Current diff (what reviewers will see)
-
-```bash
-gh pr diff PR
-```
-
-### Review summaries (includes CHANGES_REQUESTED)
-
-```bash
-gh pr view PR --json reviews --jq '.reviews[] | {author: .author.login, state, body, url, submittedAt}'
-```
-
-### Inline threads (resolution + outdated)
-
-Prefer GraphQL — REST does not expose `isResolved` cleanly:
-
-```bash
-gh api graphql -f query='
-query($owner: String!, $repo: String!, $number: Int!) {
-  repository(owner: $owner, name: $repo) {
-    pullRequest(number: $number) {
-      reviewThreads(first: 100) {
-        nodes {
-          isResolved
-          isOutdated
-          comments(first: 50) {
-            nodes {
-              url
-              body
-              path
-              line
-              author { login }
-              createdAt
-            }
-          }
-        }
-      }
-    }
-  }
-}' -f owner=OWNER -f repo=REPO -F number=PR
-```
-
-Derive `OWNER`/`REPO` from `gh repo view --json nameWithOwner -q .nameWithOwner`.
-
-### General PR conversation (non-inline)
-
-```bash
-gh pr view PR --json comments --jq '.comments[] | {author: .author.login, body, url, createdAt}'
-```
+The script prints one JSON object: `pr` (refs, head SHA, `reviewDecision`, `mergeable`), `required_checks`, `reviews` (includes CHANGES_REQUESTED bodies), `comments` (the PR conversation), and `threads` (each with `id`, `isResolved`, `isOutdated`, path, line, and comments). It reads all pages of threads. If a thread has `comments_truncated: true`, read that thread on GitHub.
 
 **Deduplicate:** One row per **actionable** thread or review note. Merge follow-ups in the same thread into one feedback item; keep the link to the **first** comment or the thread anchor URL.
 
 **Bots:** Include bot feedback only when it requests a concrete change (security, CI, policy). Skip pure informational bot noise unless the user cares.
 
-## Sub-agents (when useful)
-
-The coordinator (you) always owns **gather**, **dedupe**, the **verdict**, and the final **disposition table**. Sub-agents are optional workers for the **map feedback → evidence in diff** step.
-
-**Default:** Map every item in the main session when there are roughly **≤8 actionable items**, a modest diff, or threads that mostly point at the same few files.
-
-**Dispatch sub-agents when** mapping would be slow or context-heavy, for example:
-
-- **Many items** — roughly **9+** distinct actionable threads or review notes
-- **Large diff** — many files or packages, and each item needs reading outside the obvious hunks
-- **Independent clusters** — e.g. backend vs frontend, or disjoint directory prefixes with no shared files
-
-**Do not dispatch** for: running `gh` / GraphQL (keep that in the coordinator), a single blocking review body with one theme, or **one sub-agent per comment** (too granular; batches of **3–12 related items** per agent is enough).
-
-**How to split work**
-
-1. After dedupe, partition items into disjoint batches (by path prefix, subsystem, or reviewer theme).
-2. For each batch, spawn **one** sub-agent in **parallel** when the host supports it (`Task` / `Agent` with a general-purpose or explore type — same pattern as `review` and `requesting-code-review`).
-3. Give each worker **only** what it needs: PR URL/number, base/head refs, the batch as a bullet list (summary + link + path/line if inline), the **Status Labels** table from this skill, and either targeted `git show` paths or pasted diff hunks — **not** your full session history.
-4. Require structured return: one markdown table fragment with columns **Feedback | Link | Status | Action | Evidence** (file:line or “not in diff”), plus a short list of **uncertain** items.
-5. Coordinator merges fragments, resolves conflicts (two agents disagree → re-check that row yourself), applies **Verdict Rules**, and writes the full output format.
-
-**If sub-agent dispatch is unavailable**, map everything in-session; do not simulate parallel fan-out with multiple manual passes.
-
-**Orca:** Use `orchestration` only when the user asked for coordinated multi-agent work on the host; otherwise prefer the harness `Task`/`Agent` tool. Use `orca-cli` for ownership handoffs, not for this audit unless the user explicitly hands the PR check to another agent.
-
 ## Map Feedback to Code
 
-For each actionable item (or each batch assigned to a sub-agent):
+For each actionable item:
 
 1. Read what was asked (quote the minimum that carries the requirement).
 2. Locate the intended fix in `gh pr diff` (or local diff if in scope).
-3. If the thread is **outdated**, still verify the **current** diff — outdated often means fixed, not always.
-4. If the fix is unclear from diff alone, read the cited file at HEAD of the PR branch (`gh pr checkout PR` is optional; prefer `git show origin/HEAD:path` without mutating the worktree when possible).
+3. If the thread is **outdated**, still verify the **current** diff. Outdated often means fixed, not always.
+4. If the fix is unclear from the diff alone, read the cited file at the PR head without a checkout: `git fetch origin pull/PR/head`, then `git show FETCH_HEAD:path`. Do not use `origin/HEAD`: it is the default branch, not the PR.
 
-Use `verification-before-completion` discipline for any claim that tests or CI prove something — run or read check results, do not assume green.
+Use `verification-before-completion` discipline for any claim that tests or CI prove something: run or read check results, do not assume green.
 
-## Status Labels (pick exactly one per row)
+## States (one of each per row)
 
-| Status | Meaning |
-|--------|---------|
-| **Fixed and resolved** | Current diff satisfies the ask; thread resolved or comment outdated with fix still present |
-| **Fixed but not resolved** | Diff satisfies the ask; thread still open — reviewer must resolve or you should reply and resolve if you have permission |
-| **Not fixed and not resolved** | Ask still applies; no adequate change in scope |
-| **Not fixed but resolved** | Thread marked resolved but diff does **not** meet the ask — reopen or fix (high priority) |
-| **Not fixed and shouldn't be** | Deliberate pushback — requires explicit technical/product rationale tied to this PR's goals |
+The fix state and the thread state are separate facts, so each row has both. The fix-state words are the same as in `tracking-pr-reviews`, so the reviewer's finding and the author's row for it can be compared.
 
-Do not use "shouldn't be" to hand-wave discomfort. If you choose it, argue like you would in a review reply.
+| Fix state | Meaning |
+|-----------|---------|
+| **fixed** | The current diff satisfies the whole ask |
+| **partially fixed** | Part of the ask is done. Name what remains. It counts as not fixed |
+| **open** | The ask still applies; no adequate change in scope |
+| **declined** | Deliberate pushback that the reviewer has not accepted yet. Requires explicit technical or product rationale tied to this PR's goals |
+
+| Thread state | Meaning |
+|--------------|---------|
+| **open** / **resolved** / **outdated** | What GitHub shows for the thread |
+| **n/a** | A review body or a PR conversation comment, which has no thread |
+
+**Evidence** is what you read: file and lines at the head SHA, a check result, or "not in diff". A thread state is never evidence.
+
+Do not use **declined** to hand-wave discomfort. If you choose it, argue like you would in a review reply.
+
+## Saved state
+
+- If `./docs/task/` exists, keep the result in `./docs/task/review-feedback.md` and link it from Context files in `progress.md`. Never create `./docs/task/` for this.
+  - Exception: if the folder holds a reviewer workspace (`./docs/task/review/findings.md`), you map feedback for the reviewer. Update the findings there by `tracking-pr-reviews`; do not start a second file.
+- Otherwise, answer in chat only.
+
+The file holds the scope line (PR, base, head SHA, local changes included or not), the verdict, and the disposition table. It shows the current state: replace rows, do not append rounds. Each row has a stable ID (`R1`, `R2`). An ID does not change and is not used again.
+
+**Refresh.** When the file exists, read it first, then gather feedback again and compare the saved head SHA with the current one:
+
+- Same SHA: add new feedback and update thread states. Do not map unchanged rows again.
+- Different SHA: map again each row that is **open**, **partially fixed**, or **declined**. Map a **fixed** row again only when a file in its evidence changed (`git diff --name-only <saved SHA>..<head SHA>`), because a later commit can undo a fix. Add new feedback as new rows, then save the new SHA.
+
+## Sub-agents (optional)
+
+Map the items in the main session by default. Dispatch workers only for the mapping step, and only when one session would be slow: many items in separate areas of a large diff (for example backend threads and frontend threads with no shared files). A few threads in the same files stay in the main session.
+
+- You keep gather, dedupe, the verdict, and the table.
+- One worker per group of related items, not one per comment. Give each worker the PR, base and head refs, its items (summary, link, path and line), and the States tables. Do not give it the session history.
+- Each worker returns table rows with evidence, plus the items it is not sure about. If two workers disagree on a row, check that row yourself.
+- If the host cannot dispatch workers, map everything in the session.
 
 ## Output Format
 
-```markdown
+````markdown
 ## PR review readiness: [title](url)
 
-**Scope:** [diff source, base, head, local included Y/N]
+**Scope:** [diff source, base, head SHA, local included Y/N]
 
 ### Verdict: [Ready for re-review | Not ready | Ready with open discussion]
 
@@ -156,15 +111,15 @@ If Not ready, name the minimum set of fixes before re-requesting review.]
 
 ### Feedback disposition
 
-| Feedback (short) | Link | Status | Action |
-|------------------|------|--------|--------|
-| [One-line summary of what was requested] | [comment or review URL] | Fixed and resolved | None — optional short reply thanking reviewer |
-| … | … | Fixed but not resolved | Reply on thread summarizing fix; ask reviewer to resolve |
-| … | … | Not fixed and not resolved | [Concrete fix or question for author] |
-| … | … | Not fixed but resolved | Reopen thread; implement fix or explain mistaken resolve |
-| … | … | Not fixed and shouldn't be | Post review reply with rationale; expect reviewer pushback |
+| ID | Feedback (short) | Link | Fix state | Thread | Evidence | Action |
+|----|------------------|------|-----------|--------|----------|--------|
+| R1 | [One-line summary of what was requested] | [comment or review URL] | fixed | resolved | `file.ts:10-24` | None |
+| R2 | … | … | fixed | open | … | Reply on thread summarizing fix; ask reviewer to resolve |
+| R3 | … | … | partially fixed | open | … | [What remains, as a concrete fix] |
+| R4 | … | … | open | resolved | not in diff | Reopen thread; implement fix or explain mistaken resolve |
+| R5 | … | … | declined | open | … | Post review reply with rationale; expect reviewer pushback |
 
-**Counts:** [N fixed+resolved, N fixed+open thread, N open gaps, N disputed]
+**Counts:** [N fixed, N partially fixed, N open, N declined; N threads still open]
 
 ### Checks (when merge readiness is in scope)
 
@@ -176,38 +131,37 @@ If Not ready, name the minimum set of fixes before re-requesting review.]
 
 ### Open items needing discussion
 
-Include this section **only** when at least one row is **Not fixed and not resolved** or **Not fixed and shouldn't be** and the next step is conversation, not silent coding.
+Include this section **only** when a row is **open**, **partially fixed**, or **declined** and the next step is conversation, not coding. If each gap has a clear fix in the Action column, leave the section out.
 
-For each such item:
-
-#### [Short title matching table row]
+#### [R3: short title matching the table row]
 
 - **What was asked:** …
 - **Current state in diff:** … (cite file/lines or "absent")
 - **Recommended move:** [implement X | split to follow-up issue | reply with rationale and ask for acceptance]
 - **Draft reply (optional):** 2–4 sentences the author could post on the thread
+````
 
-If every gap is a clear action item with no ambiguity, state "None — all open items have explicit fixes in the Action column" and omit per-item subsections.
-
-```
+The Action column and the draft replies are advice. Do not post a reply, resolve or reopen a thread, or re-request review unless the user asks for it or approves it in this conversation.
 
 ## Verdict Rules
 
 **Ready for re-review** when:
 
-- No rows are **Not fixed and not resolved** or **Not fixed but resolved**
-- Every **Not fixed and shouldn't be** has a defensible rationale you would actually post
+- No row is **open** or **partially fixed**
+- Every **declined** row has a defensible rationale you would actually post
 - Required CI is green (or user explicitly scopes readiness to feedback-only)
 - No unresolved merge conflicts
 
-**Not ready** when any actionable feedback lacks a fix and lacks an agreed "shouldn't fix" decision.
+**Not ready** when any actionable feedback lacks a complete fix and lacks an agreed decision not to fix it.
 
-**Ready with open discussion** when the only remaining rows are **Not fixed and shouldn't be** (or questions that need reviewer agreement) and CI/merge mechanics are otherwise fine — author should reply on threads before re-requesting, not silently merge.
+**Ready with open discussion** when the only remaining rows are **declined** (or questions that need reviewer agreement) and CI/merge mechanics are otherwise fine. The author should reply on threads before re-requesting, not silently merge.
+
+A **resolved** thread on an **open** or **partially fixed** row is the highest priority: the thread hides a gap from the reviewer.
 
 ## Integration
 
-- After fixing **Not fixed** rows, run `verification-before-completion` on claims, then re-run this skill.
-- For writing the PR body, use `pr-description-maker`; readiness audit does not replace an accurate `## Testing` section.
+- After fixing **open** rows, run `verification-before-completion` on claims, then re-run this skill.
+- When a fix changed behavior that the PR body states, the body is stale: use `pr-description-maker`.
 - For first-pass quality review of the diff, use `code-review`.
 
 ## Red Flags
@@ -215,5 +169,7 @@ If every gap is a clear action item with no ambiguity, state "None — all open 
 - Treating "thread resolved" as proof without reading current diff
 - Ignoring **CHANGES_REQUESTED** review body because inline threads were handled
 - Collapsing five distinct asks into one row
+- Calling a partial fix **fixed**
 - Verdict **Ready** while CI is failing on this PR
 - Skipping general PR comments that contain explicit change requests
+- Posting, resolving, or reopening on GitHub without approval

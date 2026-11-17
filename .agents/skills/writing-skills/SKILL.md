@@ -437,20 +437,22 @@ Different skill types need different test approaches:
 
 **Success criteria:** Agent finds and correctly applies reference information
 
-### Rules Drawn From One Example
+### Write Rules That Work Across Cases
 
-An agent fills each section that a skill asks for. So a structure or rule that comes from one success can make other cases copy its shape, or make agents invent content.
+Start with the purpose of the skill and the workflows it serves. Identify the decision the rule must guide and the problem it must prevent. Treat the case that prompted the rule as evidence of the problem, not as a template for every case.
 
-**Test with cases that differ from the source:**
+**Check for different readings.** Read the rule without the original case. If two reasonable readings lead to different actions for the same facts, rewrite it. State what the agent can observe to tell whether the rule applies, and what to do when it applies. Replace vague terms such as “when appropriate” with decision criteria. If the agent must use judgment, name the facts that should guide it.
+
+**Check for harm to other workflows.** Apply the rule to the original case and to cases from other sources:
 - The smallest case that the skill serves.
 - A case of a different kind.
-- A case that has no content for a part of the source.
+- A case that does not need the step or output that the rule would require.
 
-**Failure:** the output copies the shape of the source, or a part holds filler or imagined content.
+Check what the agent would do in each case. If a rule adds work that does not serve its purpose, blocks a valid path, or forces the agent to invent content, narrow the condition or state what to do on the affected path. State the purpose of the condition and give a contrast case on each side.
 
-**Write each condition with its purpose and a contrast case on each side.** A short condition alone gets read in different ways. Take the contrast cases from different sources.
+**Example:** Replace “Include a rollback plan when appropriate” with “For a proposed change to deployed state, explain how to reverse it or state that it cannot be reversed. This helps the operator decide whether to accept the change. A live configuration update needs this information. A read-only diagnosis does not.”
 
-**Success criteria:** the agent leaves out what a case does not need, and still includes what it does need.
+**Success criteria:** The rule leads to the same required action when read independently for the same facts. It solves the original problem without making another valid workflow worse.
 
 ## Common Rationalizations for Skipping Testing
 
@@ -556,7 +558,7 @@ This is "watch the test fail" - you must see what agents naturally do before wri
 
 ### GREEN: Write Minimal Skill
 
-Write skill that addresses those specific rationalizations. Don't add extra content for hypothetical cases.
+Address the observed failures. Check that the rule also works for other cases the skill serves. Do not add steps for cases that have no need for them.
 
 Run same scenarios WITH skill. Agent should now comply.
 
@@ -633,6 +635,7 @@ Deploying untested skills = deploying untested code. It's a violation of quality
 - [ ] Re-test until bulletproof
 
 **Quality Checks:**
+- [ ] New or changed rules have clear decision criteria and do not make other valid workflows worse (see [Write Rules That Work Across Cases](#write-rules-that-work-across-cases))
 - [ ] Small flowchart only if decision non-obvious
 - [ ] Quick reference table
 - [ ] Common mistakes section

@@ -7,7 +7,6 @@ Layout:
 - Mirrored config files and setup/helper scripts at the repo root.
 - `.agents/` — agent configuration, skills, and agent workflow rules (including this file's sync and communication rules).
 - `.pi/`, `.omp/` — agent harness configs (Pi permission gate, artifacts, gotchas, plugins, mcp's).
-- `docs/` — design papers, verification reports, and implementation plans.
 - `goods-research/` — Node.js goods-research service (server, Pi extension, tests, scripts).
 - `k9s/` — k9s plugins config.
 - `topics/` — private Obsidian workspace; not public documentation; see "Private topics routing" below.

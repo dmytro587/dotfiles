@@ -44,6 +44,14 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.agents/hooks/task-docs-sync.sh\" claude-session-start"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

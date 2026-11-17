@@ -38,22 +38,16 @@ Run these checks before you return a description, when you wrote it from scratch
 - Put essential context in the PR body. Links to issues, code, documents, or discussions can support the explanation, but must not replace it.
 - Exclude temporary task documents, progress files, investigation notes, and local plans from the PR description, including its change list and links, unless the user explicitly requests their inclusion. Their presence does not require an inclusion question.
 - If a statement depends on configuration, use the precise configured scope. For example, say "pods in monitored namespaces" instead of "GoodKey pods" when collection is namespace-scoped.
-- Add a `## Testing` section only when it tells reviewers something that they cannot see from CI: how to verify the behavior, what the tests do not cover, or what they cover, in a details block. Omit it when the available evidence is only that CI passed, or routine syntax, formatting, or diff-hygiene checks.
-- A command by itself is not useful testing evidence. Include it only with the behavior it verifies and its result; do not turn incomplete local status into a PR-body checklist.
-- Each result in `## Testing` must come from a run on the current diff. A result copied from an existing description or an earlier session is not evidence: run it again, mark it as not rerun, or remove it.
-- Before you write that something was not run or not tested, check CI, read how the repo runs it, and run it if you can. Report the limit only if it remains. Name the exact environment and status, and do not assume them.
-- Include manual verification steps when the PR changes deployed infrastructure or UI-visible behavior.
-- If reviewers need credentials or internal endpoints to verify the change, document how to read the relevant secret. NEVER include secret values, tokens, or passwords in the PR body.
 - When explaining a technology choice, include the real selection reason: maintainership, adoption, official or widely used references, integration value, operational tradeoff, or compatibility with existing project constraints.
 - Output location:
   - If the user names an output file, write or update that file. Do not create an extra copy;
-  - Otherwise, if `./docs/task/` exists, write or update `./docs/task/PR_DESCRIPTION.md`. If `./docs/task/progress.md` exists, add one line for it under Context files (for example "- [PR_DESCRIPTION.md](PR_DESCRIPTION.md): PR description for reviewers, built from the current diff"), if that line is not there yet. Never create `./docs/task/` for this;
+  - Otherwise, if `./docs/task/` exists, write or update `./docs/task/PR_DESCRIPTION.md`. If `./docs/task/progress.md` exists, keep one line for it under Context files that names the scope and the head SHA it was built from (for example "- [PR_DESCRIPTION.md](PR_DESCRIPTION.md): PR description for reviewers, built from PR #12 at head `abc1234` plus local changes"). When the current head differs from that SHA, the description can be stale, and its `## Testing` results are not from the current diff. Never create `./docs/task/` for this;
   - Otherwise, return the PR body as Markdown in chat;
   - Drafting or updating a description file does not authorize a GitHub edit. Publish or edit the live PR body only when the user explicitly requests that action.
 
 ## How to get diff
 
-If the source of changes is not explicit, stop and ask the user to choose one scope before reading anything:
+If the source of changes is not explicit, look for a recorded scope first: `./docs/task/progress.md`, or the Context files line of `PR_DESCRIPTION.md` in it, can already name the PR and whether local changes are included. If it does, use that scope and state it. If nothing records it, stop and ask the user to choose one scope before reading anything:
 
 - The remote branch against the base branch: `gh pr view`, `gh pr diff`.
 - The remote branch plus local changes against the base branch: `gh pr view`, `gh pr diff`, `git diff --staged`, `git diff`.
@@ -122,6 +116,16 @@ Prefer a `diff` block when you show a change to an existing shape that the PR di
 
 Show the complete target shape instead when most of it is new, or when diff notation would hide which part owns what or the order of steps.
 
+## Testing section
+
+- Add a `## Testing` section only when it tells reviewers something that they cannot see from CI: how to verify the behavior, what the tests do not cover, or what they cover, in a details block. Omit it when the available evidence is only that CI passed, or routine syntax, formatting, or diff-hygiene checks.
+- A command by itself is not useful testing evidence. Include it only with the behavior it verifies and its result; do not turn incomplete local status into a PR-body checklist.
+- Each result in `## Testing` must come from a run on the current diff. A result copied from an existing description or an earlier session is not evidence: run it again, mark it as not rerun, or remove it.
+- Before you write that something was not run or not tested, check CI, read how the repo runs it, and run it if you can. Report the limit only if it remains. Name the exact environment and status, and do not assume them.
+- Include manual verification steps when the PR changes deployed infrastructure or UI-visible behavior.
+- If reviewers need credentials or internal endpoints to verify the change, document how to read the relevant secret. NEVER include secret values, tokens, or passwords in the PR body.
+- A failed check caused by this PR means the PR is not ready: fix it, do not describe it as a known issue. Disclose material verification limits in the body (for example, "full suite not run; auth tests pass") instead of omitting them when they affect reviewer judgment. Mention an unrelated validation failure only when it materially affects reviewer verification, and include the command, failure, and why it is unrelated.
+
 ## Manual migrations list
 
 The list is the record of the rollout. An operator ticks it by hand, before and after the merge, so it must show what was really done and where.
@@ -129,6 +133,7 @@ The list is the record of the rollout. An operator ticks it by hand, before and 
 - An action that runs on more than one target (cluster, namespace, region, environment) is one parent checkbox with one child checkbox for each target. Name each child by its real target, for example `- [ ] test-a, namespace default`. Text that is the same for every target goes under the parent. A command or value that differs per target goes in its child.
 - Do not write "do the same for the other clusters" or "repeat for production". Do not list the targets as plain bullets, in a sentence, or in a table under one checkbox. A target without its own checkbox cannot be marked done, so the list cannot show where the action is still open.
 - An action that runs once for the whole system, such as one schema migration, has no children.
+- A tick records an action that was done. A rebuild of the description must not remove it. Before you rebuild a description file, and before you publish over a live PR body, read the ticks in the existing list, and in the live body too, because the operator ticks there. Keep each tick on its item. If a ticked item is not in the new list, tell the user; do not drop it silently.
 - When each step needs its own result and recovery lines, use the `write-migration-steps` skill.
 
 ## Writing Guidance
@@ -137,5 +142,4 @@ The list is the record of the rollout. An operator ticks it by hand, before and 
 - Keep decision rationale dense. Do not expand it with generic benefits; name the concrete reason the chosen option is better than the main alternative.
 - If the PR adds a setup or rollout script, mention what it installs or changes and where it runs.
 - If the PR adds UI, dashboards, or deployed infrastructure, include the access path reviewers need to inspect it.
-- A failed check caused by this PR means the PR is not ready: fix it, do not describe it as a known issue. Disclose material verification limits in the body (for example, "full suite not run; auth tests pass") instead of omitting them when they affect reviewer judgment. Mention an unrelated validation failure only when it materially affects reviewer verification, and include the command, failure, and why it is unrelated.
 

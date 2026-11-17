@@ -72,6 +72,32 @@ ditto -c -k --keepParent topics ~/Desktop/topics.zip
 ```
 Send `topics.zip` to the new Mac with AirDrop. Then unzip it into `~/Documents/www/projects/dotfiles/`.
 
+## Shared Agent Skills
+
+`bootstrap_agents.sh` links each skill in `.agents/skills/` to `~/.agents/skills/<name>`, then links available global skills into `~/.claude/skills/`. For repository skills, edits through either link change the repository files.
+
+Existing copies or different links are moved to `~/.agents/skills-backup.XXXXXX/` before replacement. The script prints the backup paths. Skills that exist only in HOME are left unchanged. Orca skills stay global and are not stored in this repository.
+
+## Shared Task Docs Hook
+
+Claude Code and both OMP profiles use [`.agents/hooks/task-docs-sync.sh`](.agents/hooks/task-docs-sync.sh). Bootstrap links `~/.agents/hooks/task-docs-sync.sh` to the repository, so hook edits take effect without another bootstrap run. Bootstrap keeps any replaced copy or link in `~/.agents/hooks-backup.XXXXXX/`.
+
+## DCG Configuration
+
+`bootstrap_agents.sh` runs the official Destructive Command Guard (DCG) installer in easy mode after copying the agent folders. The installer manages repeat installs and merges supported agent hooks into the existing settings.
+
+The repository owns [`.config/dcg/config.toml`](.config/dcg/config.toml). Each agent bootstrap run copies it to `~/.config/dcg/config.toml`, replacing that file with the repository version. The target directory uses mode `0700`, and the file uses mode `0600`. Other DCG files, such as a local allowlist, are kept.
+
+The config keeps DCG's severity-based responses. It adds protection for PostgreSQL, Redis, SQLite, Kubernetes, AWS, Google Cloud, S3, Google Cloud Storage, Terraform, remote commands and copies, permissions, AWS secrets, and package managers. Docker, Compose, and service-management packs are explicitly disabled. Strict Git protection is not enabled; built-in core Git, filesystem, and disk protection stays active.
+
+<details>
+<summary>Upstream limits observed with DCG 0.15.3 in Docker</summary>
+
+- `system.permissions` denied `chmod -R 777 /etc`, but allowed `chmod 777 private-file`. Enabling the pack does not guarantee that every unsafe permission change is detected.
+- The official installer configured Claude Code, Codex, and OMP hooks, but reported a Droid configuration failure. It still returned success. Do not assume Droid is protected without checking its hook setup.
+
+</details>
+
 ## Orca Configuration
 
 `.orca/` keeps Orca keybindings and global source-control instructions for branch names, pull requests, and commit messages. `bootstrap.sh` installs them through `bootstrap_agents.sh`. Orca must have been launched once and then quit before changed profile settings can be restored. See `.orca/README.md` for a focused install command and details.
