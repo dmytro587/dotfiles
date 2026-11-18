@@ -45,6 +45,7 @@
   - Write a condition with its purpose and a contrast case on each side, because a short condition alone gets read in different ways;
   - Load `writing-skills` before you propose a skill change, also for a draft;
 - Ask only when the answer changes what you do next and the request, the code, or a sensible default cannot settle it. Otherwise state the assumption and continue. If several interpretations would give different results, present them; do not pick one silently;
+  - Think before you ask. Each question must carry your own answer: the fact you found, what the thing is for in the whole system (its purpose, not only its current use), your lean, and the reason. Not "X is not used. Delete it?" but "X is not used. I would keep it and connect it, because it makes the monitoring more stable when Y fails. Delete it only if Z." Put your lean first in the ask-user tool options. Contrast: when no lean is possible (a name, a taste, a fact only I know), name the fact that settles it and recommend for each value;
 - Surface tradeoffs. If a simpler approach exists, say so. Push back when warranted;
 - For changes, define task-specific success criteria. Loop within the requested scope until those criteria are verified:
   - Transform tasks into verifiable goals:
